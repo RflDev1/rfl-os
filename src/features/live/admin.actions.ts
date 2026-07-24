@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireAdminSection } from "@/features/admin/authorization";
 import { prisma } from "@/lib/prisma";
 import { fightStateSchema, liveEventStateSchema, liveUpdateSchema } from "./live.schema";
+import { completeFight, FightResultStateError } from "./fight-results.service";
 
 function fail(message: string): never {
   redirect(`/admin/live?error=${encodeURIComponent(message)}`);
@@ -26,29 +27,42 @@ export async function postLiveUpdate(formData: FormData) {
 }
 
 export async function updateFightState(formData: FormData) {
-  await requireAdminSection("EVENTS");
+  const session = await requireAdminSection("EVENTS");
   const parsed = fightStateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the fight state.");
   const existing = await prisma.fight.findUnique({ where: { id: parsed.data.fightId }, include: { redFighter: true, blueFighter: true } });
   if (!existing) fail("Fight not found.");
+  if (parsed.data.status === "COMPLETED") {
+    try {
+      await completeFight({
+        fightId: existing.id,
+        result: parsed.data.result!,
+        resultSummary: parsed.data.resultSummary,
+        actorId: session.user.id,
+      });
+    } catch (error) {
+      fail(error instanceof FightResultStateError ? error.message : "The official result could not be recorded.");
+    }
+    revalidatePath(`/live/${existing.eventId}`);
+    revalidatePath(`/fighters/${existing.redFighterId}`);
+    revalidatePath(`/fighters/${existing.blueFighterId}`);
+    revalidatePath("/fighters");
+    revalidatePath("/admin/rankings");
+    done("Official result recorded. Fighter records and rankings are updated.");
+  }
+  if (existing.status === "COMPLETED") fail("Completed fight results cannot be changed from this control.");
 
   await prisma.$transaction(async (tx) => {
     await tx.fight.update({
       where: { id: existing.id },
       data: {
         status: parsed.data.status,
-        result: parsed.data.status === "COMPLETED" ? parsed.data.result : null,
-        resultSummary: parsed.data.status === "COMPLETED" ? parsed.data.resultSummary : null,
+        result: null,
+        resultSummary: null,
       },
     });
     if (parsed.data.status === "LIVE" || parsed.data.status === "COMPLETED" || parsed.data.status === "CANCELLED") {
       await tx.betMarket.updateMany({ where: { fightId: existing.id, status: "OPEN" }, data: { status: "LOCKED" } });
-    }
-    if (parsed.data.status === "COMPLETED") {
-      const winner = parsed.data.result === "RED_WIN" ? existing.redFighter.name : parsed.data.result === "BLUE_WIN" ? existing.blueFighter.name : parsed.data.result === "DRAW" ? "Draw" : "No contest";
-      await tx.fightUpdate.create({
-        data: { eventId: existing.eventId, fightId: existing.id, kind: "RESULT", message: parsed.data.resultSummary ? `${winner}: ${parsed.data.resultSummary}` : winner },
-      });
     }
   });
   revalidatePath(`/live/${existing.eventId}`);

@@ -1,0 +1,19 @@
+import { NextResponse } from "next/server";
+import { deliverDueDiscordNotifications } from "@/features/fight-requests/discord.service";
+import { getEnv } from "@/lib/env";
+
+export async function POST(request: Request) {
+  const env = getEnv();
+  if (!env.REMINDER_JOB_SECRET) {
+    return NextResponse.json({ error: "Reminder processing is not configured." }, { status: 503 });
+  }
+  if (request.headers.get("authorization") !== `Bearer ${env.REMINDER_JOB_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  const result = await deliverDueDiscordNotifications({
+    apiBaseUrl: env.DISCORD_API_BASE_URL,
+    botToken: env.DISCORD_BOT_TOKEN,
+    appUrl: env.APP_URL,
+  });
+  return NextResponse.json(result);
+}

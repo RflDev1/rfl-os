@@ -41,9 +41,27 @@ export async function reviewFightRequest(input: { requestId: string; actorId: st
     const fight = await tx.fight.create({ data: { eventId: event.id, redFighterId: request.requesterFighterId, blueFighterId: request.opponentFighterId, position: (lastFight._max.position ?? 0) + 1, scheduledAt: event.startsAt } });
     const approved = await tx.fightRequest.update({ where: { id: request.id }, data: { status: "APPROVED", fightId: fight.id, reviewedById: input.actorId, reviewedAt: new Date() } });
     const recipients = [request.requester.user, request.opponent.user].filter((user): user is NonNullable<typeof user> => Boolean(user));
+    const scheduledAt = fight.scheduledAt ?? event.startsAt;
+    const notificationTimes = [
+      { kind: "FIGHT_APPROVED" as const, scheduledFor: new Date() },
+      { kind: "FIGHT_REMINDER_2H" as const, scheduledFor: new Date(scheduledAt.getTime() - 2 * 60 * 60 * 1000) },
+      { kind: "FIGHT_REMINDER_1H" as const, scheduledFor: new Date(scheduledAt.getTime() - 60 * 60 * 1000) },
+      { kind: "FIGHT_REMINDER_10M" as const, scheduledFor: new Date(scheduledAt.getTime() - 10 * 60 * 1000) },
+    ];
     for (const user of recipients) {
       const discord = user.accounts[0];
-      if (discord) await tx.discordNotification.create({ data: { fightRequestId: request.id, recipientUserId: user.id, discordUserId: discord.providerAccountId } });
+      if (discord) {
+        await tx.discordNotification.createMany({
+          data: notificationTimes.map(({ kind, scheduledFor }) => ({
+            fightRequestId: request.id,
+            fightId: fight.id,
+            recipientUserId: user.id,
+            discordUserId: discord.providerAccountId,
+            kind,
+            scheduledFor,
+          })),
+        });
+      }
     }
     await tx.adminAuditEntry.create({ data: { actorId: input.actorId, action: "FIGHT_REQUEST_APPROVED", targetType: "FightRequest", targetId: request.id, summary: { fightId: fight.id, eventId: event.id, requesterRank: request.requester.rank, opponentRank: request.opponent.rank } } });
     return approved;

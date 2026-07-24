@@ -6,6 +6,20 @@ import { getEnv } from "@/lib/env";
 
 const env = getEnv();
 
+async function requireRflGuildMembership(discordUserId: string, accessToken?: string) {
+  if (!env.DISCORD_GUILD_ID || !accessToken) return false;
+  const response = await fetch(`${env.DISCORD_API_BASE_URL}/guilds/${env.DISCORD_GUILD_ID}/members/${discordUserId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ access_token: accessToken }),
+    cache: "no-store",
+  });
+  return response.status === 201 || response.status === 204;
+}
+
 async function syncFighterAnalystRole(userId: string, discordUserId: string) {
   if (!env.DISCORD_GUILD_ID || !env.FIGHTER_ANALYST_DISCORD_ROLE_ID) return;
   const response = await fetch(`${env.DISCORD_API_BASE_URL}/guilds/${env.DISCORD_GUILD_ID}/members/${discordUserId}`, {
@@ -33,7 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Discord({
       clientId: env.DISCORD_CLIENT_ID,
       clientSecret: env.DISCORD_CLIENT_SECRET,
-      authorization: { params: { scope: "identify" } },
+      authorization: { params: { scope: "identify guilds.join" } },
     }),
   ],
   pages: { signIn: "/signin", error: "/signin" },
@@ -41,6 +55,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       if (!user.id) return false;
+      if (
+        account?.provider === "discord" &&
+        !(await requireRflGuildMembership(account.providerAccountId, account.access_token))
+      ) {
+        return false;
+      }
       const storedUser = await prisma.user.findUnique({
         where: { id: user.id },
         select: { status: true },

@@ -66,7 +66,7 @@ export async function reviewFightRequestAction(formData: FormData) {
   catch (error) { adminDone(error instanceof Error ? error.message : "The request could not be reviewed.", true); }
   if (request.status === "APPROVED") {
     const env = getEnv();
-    const jobs = await prisma.discordNotification.findMany({ where: { fightRequestId: request.id, status: { not: "SENT" } } });
+    const jobs = await prisma.discordNotification.findMany({ where: { fightRequestId: request.id, kind: "FIGHT_APPROVED", status: { not: "SENT" } } });
     await Promise.allSettled(jobs.map((job) => deliverDiscordNotification(job.id, { apiBaseUrl: env.DISCORD_API_BASE_URL, botToken: env.DISCORD_BOT_TOKEN, appUrl: env.APP_URL })));
   }
   revalidatePath("/live");

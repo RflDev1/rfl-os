@@ -73,6 +73,8 @@ try {
     "20260718100000_marketplace",
     "20260718110000_fight_requests",
     "20260722010000_fighter_status",
+    "20260724010000_fighter_analyst_role",
+    "20260724230000_discord_fight_reminders",
   ]);
 
   const player = await prisma.user.create({
@@ -101,6 +103,7 @@ try {
     DISCORD_CLIENT_SECRET: "integration-secret",
     DISCORD_BOT_TOKEN: "integration-bot-token",
     DISCORD_API_BASE_URL: "https://discord.integration.invalid/api/v10",
+    DISCORD_GUILD_ID: "1514881431229431868",
     DAILY_REWARD_AMOUNT: "100",
     COIN_FLIP_MIN_WAGER: "10",
     COIN_FLIP_MAX_WAGER: "1000",
@@ -130,6 +133,7 @@ try {
   const marketplaceService = await import("../src/features/marketplace/marketplace.service");
   const fightRequestService = await import("../src/features/fight-requests/fight-requests.service");
   const discordService = await import("../src/features/fight-requests/discord.service");
+  const fightResultService = await import("../src/features/live/fight-results.service");
   servicePrisma = (await import("../src/lib/prisma")).prisma;
   const rewardNow = new Date("2026-07-18T12:00:00Z");
   const concurrentClaims = await Promise.all([
@@ -451,9 +455,9 @@ try {
   assert.ok(approvedRequest.fightId);
   const approvedFight = await prisma.fight.findUniqueOrThrow({ where: { id: approvedRequest.fightId! } });
   assert.equal(approvedFight.eventId, scheduledEvent.id);
-  assert.equal(await prisma.discordNotification.count({ where: { fightRequestId: pendingRequest.id } }), 2);
+  assert.equal(await prisma.discordNotification.count({ where: { fightRequestId: pendingRequest.id } }), 8);
   await assert.rejects(fightRequestService.reviewFightRequest({ requestId: pendingRequest.id, actorId: player.id, operation: "APPROVE", eventId: scheduledEvent.id, rankRange: 5 }), /already been reviewed/);
-  const notificationJobs = await prisma.discordNotification.findMany({ where: { fightRequestId: pendingRequest.id } });
+  const notificationJobs = await prisma.discordNotification.findMany({ where: { fightRequestId: pendingRequest.id, kind: "FIGHT_APPROVED" } });
   for (const job of notificationJobs) {
     let call = 0;
     await discordService.deliverDiscordNotification(job.id, { apiBaseUrl: "https://discord.integration.invalid/api/v10", botToken: "test", appUrl: "https://integration.rfl.invalid" }, async () => {
@@ -462,8 +466,21 @@ try {
     });
   }
   assert.equal(await prisma.discordNotification.count({ where: { fightRequestId: pendingRequest.id, status: "SENT" } }), 2);
+  await fightResultService.completeFight({ fightId: approvedFight.id, result: "BLUE_WIN", resultSummary: "Upset decision", actorId: player.id });
+  const [rankedRed, rankedBlue] = await Promise.all([
+    prisma.fighter.findUniqueOrThrow({ where: { id: red.id } }),
+    prisma.fighter.findUniqueOrThrow({ where: { id: blue.id } }),
+  ]);
+  assert.equal(rankedRed.rank, 15);
+  assert.equal(rankedBlue.rank, 10);
+  assert.equal(rankedRed.losses, red.losses + 1);
+  assert.equal(rankedBlue.wins, blue.wins + 1);
+  await assert.rejects(
+    fightResultService.completeFight({ fightId: approvedFight.id, result: "BLUE_WIN", actorId: player.id }),
+    /already completed/,
+  );
 
-  process.stdout.write("Database integration passed: migrations, concurrent casino, betting, pack, marketplace, and fight-request actions, rewards, audited scheduling, Discord outbox delivery, ledger reconciliation, ownership, duplicates, stale listings, rank eligibility, constraints, roles, home content, and live events.\n");
+  process.stdout.write("Database integration passed: migrations, concurrent casino, betting, pack, marketplace, fight requests, result records, upset rankings, Discord notification scheduling, rewards, ledgers, ownership, duplicates, constraints, roles, home content, and live events.\n");
 } finally {
   await servicePrisma?.$disconnect();
   await prisma?.$disconnect();

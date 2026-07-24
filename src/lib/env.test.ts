@@ -9,6 +9,7 @@ const valid = {
   DISCORD_CLIENT_SECRET: "client-secret",
   DISCORD_BOT_TOKEN: "test-bot-token",
   DISCORD_API_BASE_URL: "https://discord.example/api/v10",
+  DISCORD_GUILD_ID: "1514881431229431868",
   DAILY_REWARD_AMOUNT: "100",
   COIN_FLIP_MIN_WAGER: "10",
   COIN_FLIP_MAX_WAGER: "1000",

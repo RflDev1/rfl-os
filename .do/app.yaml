@@ -79,6 +79,9 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: "1516694555112767529"
+      - key: REMINDER_JOB_SECRET
+        scope: RUN_TIME
+        type: SECRET
       - key: DAILY_REWARD_AMOUNT
         scope: RUN_TIME
         type: GENERAL

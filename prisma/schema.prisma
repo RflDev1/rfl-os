@@ -90,6 +90,13 @@ enum NotificationDeliveryStatus {
   FAILED
 }
 
+enum DiscordNotificationKind {
+  FIGHT_APPROVED
+  FIGHT_REMINDER_2H
+  FIGHT_REMINDER_1H
+  FIGHT_REMINDER_10M
+}
+
 enum CardRarity {
   COMMON
   RARE
@@ -251,6 +258,7 @@ model Fight {
   updates        FightUpdate[]
   market         BetMarket?
   request        FightRequest?
+  notifications  DiscordNotification[]
 
   @@index([eventId, position])
   @@map("fights")
@@ -474,19 +482,23 @@ model FightRequest {
 
 model DiscordNotification {
   id              String                     @id @default(cuid())
-  fightRequestId  String                     @map("fight_request_id")
+  fightRequestId  String?                    @map("fight_request_id")
+  fightId         String                     @map("fight_id")
   recipientUserId String                     @map("recipient_user_id")
   discordUserId   String                     @map("discord_user_id")
+  kind            DiscordNotificationKind
+  scheduledFor    DateTime                   @map("scheduled_for")
   status          NotificationDeliveryStatus @default(PENDING)
   attempts        Int                        @default(0)
   lastError       String?                    @map("last_error")
   createdAt       DateTime                   @default(now()) @map("created_at")
   sentAt          DateTime?                  @map("sent_at")
-  request         FightRequest               @relation(fields: [fightRequestId], references: [id], onDelete: Restrict)
+  request         FightRequest?              @relation(fields: [fightRequestId], references: [id], onDelete: Restrict)
+  fight           Fight                      @relation(fields: [fightId], references: [id], onDelete: Restrict)
   recipient       User                       @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
 
-  @@unique([fightRequestId, recipientUserId])
-  @@index([status, createdAt])
+  @@unique([fightId, recipientUserId, kind])
+  @@index([status, scheduledFor])
   @@map("discord_notifications")
 }
 
