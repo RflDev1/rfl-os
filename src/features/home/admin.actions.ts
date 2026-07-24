@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/features/admin/authorization";
+import { requireAdminSection } from "@/features/admin/authorization";
 import { announcementSchema, contentIdSchema, eventSchema, eventVisibilitySchema, fightSchema, fighterSchema } from "./home.schema";
 
 function fail(message: string): never {
@@ -17,7 +17,7 @@ function done(message: string): never {
 }
 
 export async function createFighter(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("CONTENT");
   const parsed = fighterSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the fighter details.");
   const eligibleUser = await prisma.user.findFirst({
@@ -30,7 +30,7 @@ export async function createFighter(formData: FormData) {
 }
 
 export async function createEvent(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("CONTENT");
   const parsed = eventSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the event details.");
 
@@ -42,7 +42,7 @@ export async function createEvent(formData: FormData) {
 }
 
 export async function createFight(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("CONTENT");
   const parsed = fightSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the fight details.");
   await prisma.fight.create({ data: parsed.data });
@@ -50,7 +50,7 @@ export async function createFight(formData: FormData) {
 }
 
 export async function createAnnouncement(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("CONTENT");
   const parsed = announcementSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the announcement.");
   await prisma.announcement.create({ data: parsed.data });
@@ -58,7 +58,7 @@ export async function createAnnouncement(formData: FormData) {
 }
 
 export async function updateEventVisibility(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("CONTENT");
   const parsed = eventVisibilitySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail("Check the event publishing settings.");
   await prisma.$transaction(async (tx) => {
@@ -72,7 +72,7 @@ export async function updateEventVisibility(formData: FormData) {
 }
 
 export async function deactivateAnnouncement(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("CONTENT");
   const parsed = contentIdSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail("Announcement not found.");
   await prisma.announcement.update({ where: { id: parsed.data.id }, data: { active: false } });

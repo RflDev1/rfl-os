@@ -35,6 +35,8 @@ const schema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(1).optional(),
   ),
+  DISCORD_GUILD_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d+$/).optional()),
+  FIGHTER_ANALYST_DISCORD_ROLE_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d+$/).optional()),
   CARD_IMAGE_STORAGE_ENDPOINT: z.string().url().optional(),
   CARD_IMAGE_STORAGE_REGION: z.string().min(1).optional(),
   CARD_IMAGE_STORAGE_BUCKET: z.string().min(1).optional(),

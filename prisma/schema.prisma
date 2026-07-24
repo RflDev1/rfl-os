@@ -16,6 +16,7 @@ enum UserStatus {
 enum Role {
   PLAYER
   MODERATOR
+  FIGHTER_ANALYST
   ADMIN
 }
 

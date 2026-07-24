@@ -29,5 +29,16 @@ test("mobile visitors receive primary bottom navigation", async ({ page }, testI
   await page.goto("/");
   const navigation = page.getByRole("navigation", { name: "Mobile navigation" });
   await expect(navigation).toBeVisible();
-  await expect(navigation.getByRole("link")).toHaveCount(6);
+  await expect(navigation.getByRole("link")).toHaveCount(5);
+  await expect(navigation.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: "Realm Fighting League home" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+});
+
+test("desktop navigation follows the selected page", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop");
+  await page.goto("/fighters");
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  await expect(navigation.getByRole("link", { name: "Fighters" })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current", "page");
 });

@@ -5,11 +5,23 @@ import { BrandMark } from "./brand-mark";
 import { Crown } from "./crown";
 import { endSession } from "@/features/auth/actions";
 import { prisma } from "@/lib/prisma";
+import { SiteNavigation } from "./site-navigation";
 
 export async function SiteHeader() {
   const session = await auth();
   const ready = Boolean(session?.user.profileCompletedAt);
   const fighter = session?.user.id ? await prisma.fighter.findUnique({ where: { userId: session.user.id }, select: { id: true } }) : null;
+  const navItems = [
+    { href: "/", label: "Home" },
+    { href: "/live", label: "Live" },
+    { href: "/fighters", label: "Fighters" },
+    { href: "/cards", label: "Cards" },
+    { href: "/market", label: "Market" },
+    ...(session?.user.profileCompletedAt ? [{ href: "/casino/coin-flip", label: "Casino", match: ["/casino"] }] : []),
+    ...(fighter ? [{ href: "/fight-requests", label: "Fight requests" }] : []),
+    ...(session?.user.roles.some((role) => role === "ADMIN" || role === "FIGHTER_ANALYST") ? [{ href: "/admin/home", label: "Control center", match: ["/admin"] }] : []),
+  ];
+  const mobileItems = navItems.filter(({ href }) => ["/", "/live", "/fighters", "/fight-requests", "/casino/coin-flip", "/cards", "/market"].includes(href));
 
   return (
     <header className="site-header">
@@ -18,16 +30,7 @@ export async function SiteHeader() {
         <span className="brand-copy"><strong>RFL</strong><small>Realm Fighting League</small></span>
       </Link>
 
-      <nav className="main-nav" aria-label="Primary navigation">
-        <Link className="nav-link nav-link-active" href="/">Home</Link>
-        <Link className="nav-link" href="/live">Live</Link>
-        <Link className="nav-link" href="/fighters">Fighters</Link>
-        <Link className="nav-link" href="/cards">Cards</Link>
-        <Link className="nav-link" href="/market">Market</Link>
-        {session?.user.profileCompletedAt && <Link className="nav-link" href="/casino/coin-flip">Casino</Link>}
-        {fighter && <Link className="nav-link" href="/fight-requests">Fight requests</Link>}
-        {session?.user.roles.includes("ADMIN") && <Link className="nav-link" href="/admin/home">Control center</Link>}
-      </nav>
+      <SiteNavigation items={navItems} />
 
       <div className="header-actions">
         {session ? (
@@ -48,9 +51,7 @@ export async function SiteHeader() {
           <Link className="button button-small" href="/signin">Sign in</Link>
         )}
       </div>
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link href="/">Home</Link><Link href="/live">Live</Link><Link href="/fighters">Fighters</Link>{fighter ? <Link href="/fight-requests">Requests</Link> : <Link href="/casino/coin-flip">Casino</Link>}<Link href="/cards">Cards</Link><Link href="/market">Market</Link>
-      </nav>
+      <SiteNavigation items={mobileItems.map((item) => ({ ...item, label: item.href === "/fight-requests" ? "Requests" : item.label }))} mobile />
     </header>
   );
 }

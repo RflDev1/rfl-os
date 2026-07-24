@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/features/admin/authorization";
+import { requireAdminSection } from "@/features/admin/authorization";
 import { auth } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +32,7 @@ function adminDone(message: string, error = false): never {
 }
 
 export async function assignFighterAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireAdminSection("REQUESTS");
   const parsed = assignFighterSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminDone(parsed.error.issues[0]?.message ?? "Check the fighter assignment.", true);
   const fighter = await prisma.fighter.update({ where: { id: parsed.data.fighterId }, data: { userId: parsed.data.userId, rank: parsed.data.rank } }).catch(() => null);
@@ -42,7 +42,7 @@ export async function assignFighterAction(formData: FormData) {
 }
 
 export async function updateFighterStatusAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireAdminSection("RANKINGS");
   const parsed = fighterStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/admin/rankings?error=Invalid+fighter+status");
   const existing = await prisma.fighter.findUnique({ where: { id: parsed.data.fighterId } });
@@ -58,7 +58,7 @@ export async function updateFighterStatusAction(formData: FormData) {
 }
 
 export async function reviewFightRequestAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireAdminSection("REQUESTS");
   const parsed = reviewFightRequestSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminDone(parsed.error.issues[0]?.message ?? "Check the review.", true);
   let request;
@@ -74,7 +74,7 @@ export async function reviewFightRequestAction(formData: FormData) {
 }
 
 export async function retryDiscordNotificationAction(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("REQUESTS");
   const parsed = retryNotificationSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminDone("Invalid notification.", true);
   const env = getEnv();

@@ -6,6 +6,26 @@ import { getEnv } from "@/lib/env";
 
 const env = getEnv();
 
+async function syncFighterAnalystRole(userId: string, discordUserId: string) {
+  if (!env.DISCORD_GUILD_ID || !env.FIGHTER_ANALYST_DISCORD_ROLE_ID) return;
+  const response = await fetch(`${env.DISCORD_API_BASE_URL}/guilds/${env.DISCORD_GUILD_ID}/members/${discordUserId}`, {
+    headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
+    cache: "no-store",
+  });
+  if (!response.ok) return;
+  const member = await response.json() as { roles?: string[] };
+  const hasRole = member.roles?.includes(env.FIGHTER_ANALYST_DISCORD_ROLE_ID) ?? false;
+  if (hasRole) {
+    await prisma.userRole.upsert({
+      where: { userId_role: { userId, role: "FIGHTER_ANALYST" } },
+      update: {},
+      create: { userId, role: "FIGHTER_ANALYST" },
+    });
+  } else {
+    await prisma.userRole.deleteMany({ where: { userId, role: "FIGHTER_ANALYST" } });
+  }
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "database" },
@@ -37,6 +57,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           update: {},
           create: { userId: user.id, role: "ADMIN" },
         });
+      }
+      if (storedUser && account?.provider === "discord") {
+        await syncFighterAnalystRole(user.id, account.providerAccountId);
       }
 
       return true;
@@ -105,6 +128,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
         }
       });
+      if (account.userId && account.provider === "discord") {
+        await syncFighterAnalystRole(account.userId, account.providerAccountId);
+      }
     },
   },
 });

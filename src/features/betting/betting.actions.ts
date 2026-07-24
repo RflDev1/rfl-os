@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/features/admin/authorization";
+import { requireAdminSection } from "@/features/admin/authorization";
 import { auth } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -36,7 +36,7 @@ function adminRedirect(message: string, error = false): never {
 }
 
 export async function saveMarketAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireAdminSection("BETTING");
   const parsed = marketSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminRedirect(parsed.error.issues[0]?.message ?? "Check the odds.", true);
   const fight = await prisma.fight.findUnique({ where: { id: parsed.data.fightId } });
@@ -51,7 +51,7 @@ export async function saveMarketAction(formData: FormData) {
 }
 
 export async function operateMarketAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireAdminSection("BETTING");
   const parsed = marketOperationSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminRedirect("Check the market operation.", true);
   try {

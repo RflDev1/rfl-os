@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/features/admin/authorization";
 
 export const metadata: Metadata = { title: "Control center" };
 
 export default async function AdminTodayPage() {
+  await requireAdmin();
   const now = new Date();
   const [liveEvent, nextEvent, pendingRequests, failedNotifications, settlementQueue, suspendedUsers, activeListings, walletTotals, recentAudit, databaseHealth] = await Promise.all([
     prisma.event.findFirst({ where: { status: "LIVE" }, include: { fights: { orderBy: { position: "asc" } } } }),

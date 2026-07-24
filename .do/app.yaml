@@ -67,6 +67,14 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: https://discord.com/api/v10
+      - key: DISCORD_GUILD_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: "1514881431229431868"
+      - key: FIGHTER_ANALYST_DISCORD_ROLE_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: "1516694555112767529"
       - key: DAILY_REWARD_AMOUNT
         scope: RUN_TIME
         type: GENERAL

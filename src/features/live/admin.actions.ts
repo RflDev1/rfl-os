@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/features/admin/authorization";
+import { requireAdminSection } from "@/features/admin/authorization";
 import { prisma } from "@/lib/prisma";
 import { fightStateSchema, liveEventStateSchema, liveUpdateSchema } from "./live.schema";
 
@@ -17,7 +17,7 @@ function done(message: string): never {
 }
 
 export async function postLiveUpdate(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("EVENTS");
   const parsed = liveUpdateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the update.");
   await prisma.fightUpdate.create({ data: parsed.data });
@@ -26,7 +26,7 @@ export async function postLiveUpdate(formData: FormData) {
 }
 
 export async function updateFightState(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("EVENTS");
   const parsed = fightStateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the fight state.");
   const existing = await prisma.fight.findUnique({ where: { id: parsed.data.fightId }, include: { redFighter: true, blueFighter: true } });
@@ -56,7 +56,7 @@ export async function updateFightState(formData: FormData) {
 }
 
 export async function updateLiveEventState(formData: FormData) {
-  await requireAdmin();
+  await requireAdminSection("EVENTS");
   const parsed = liveEventStateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail("Check the event state.");
   await prisma.$transaction(async (tx) => {
