@@ -480,7 +480,25 @@ try {
     /already completed/,
   );
 
-  process.stdout.write("Database integration passed: migrations, concurrent casino, betting, pack, marketplace, fight requests, result records, upset rankings, Discord notification scheduling, rewards, ledgers, ownership, duplicates, constraints, roles, home content, and live events.\n");
+  const resetService = await import("../src/features/admin/testing-reset.service");
+  const reset = await resetService.resetTestingData(player.id);
+  assert.ok(reset.removedUsers >= 4);
+  assert.ok(reset.removedFighters >= 3);
+  assert.ok(reset.removedFights >= 3);
+  assert.equal(await prisma.user.count(), 1);
+  assert.equal((await prisma.user.findFirstOrThrow()).id, player.id);
+  assert.equal((await prisma.wallet.findUniqueOrThrow({ where: { userId: player.id } })).balance, 0);
+  assert.equal(await prisma.fighter.count(), 0);
+  assert.equal(await prisma.fight.count(), 0);
+  assert.equal(await prisma.event.count(), 0);
+  assert.equal(await prisma.cardInstance.count(), 0);
+  assert.equal(await prisma.cardSet.count(), 1);
+  assert.equal(await prisma.cardDefinition.count(), 2);
+  assert.equal(await prisma.cardDefinition.count({ where: { fighterId: { not: null } } }), 0);
+  assert.equal(await prisma.packDefinition.count(), 1);
+  assert.equal(await prisma.adminAuditEntry.count({ where: { action: "TESTING_DATA_RESET", actorId: player.id } }), 1);
+
+  process.stdout.write("Database integration passed: migrations, concurrent casino, betting, pack, marketplace, fight requests, result records, upset rankings, Discord notification scheduling, protected testing reset, preserved card catalog, rewards, ledgers, ownership, duplicates, constraints, roles, home content, and live events.\n");
 } finally {
   await servicePrisma?.$disconnect();
   await prisma?.$disconnect();
