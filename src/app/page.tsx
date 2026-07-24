@@ -5,6 +5,7 @@ import { getHomeContent } from "@/features/home/queries";
 import { DailyReward } from "@/features/wallet/daily-reward";
 import { getWalletSummary } from "@/features/wallet/wallet.service";
 import { getEnv } from "@/lib/env";
+import { Crown } from "@/components/crown";
 
 function displayDate(date: Date) {
   return `${new Intl.DateTimeFormat("en-US", {
@@ -33,35 +34,54 @@ export default async function HomePage() {
         </aside>
       )}
       <section className="hero" aria-labelledby="hero-title">
-        <div className="hero-aura" />
-        <div className="hero-grid" aria-hidden="true" />
         <div className="hero-content">
-          <p className="eyebrow"><span /> {featuredEvent?.status === "LIVE" ? "Live now" : featuredEvent ? displayDate(featuredEvent.startsAt) : "The arena is opening"}</p>
+          <p className="eyebrow"><span /> Defend your bed. Destroy theirs.</p>
           <h1 id="hero-title">
-            {featuredEvent ? featuredEvent.title : "Enter the realm."}<br />
-            <em>{featuredFight ? `${featuredFight.redFighter.name} vs ${featuredFight.blueFighter.name}` : "Build your legacy."}</em>
+            Fight for<br />
+            <em>the realm.</em>
           </h1>
           <p className="hero-lede">
-            {featuredEvent?.subtitle ?? "Your home for fight nights, fearless competition, and rewards earned in the arena."}
+            Enter competitive BedWars battles, watch fight nights, earn Crowns, and build a collection worthy of the arena.
           </p>
           <div className="hero-actions">
             <Link className="button button-primary" href={destination}>
-              {session ? "Enter your corner" : "Join with Discord"}
+              {session ? "Enter the arena" : "Join with Discord"}
               <span aria-hidden="true">→</span>
             </Link>
-            <a className="button button-ghost" href="#what-is-rfl">Discover RFL</a>
+            <Link className="button button-ghost" href="/live">Watch live</Link>
           </div>
           <div className="trust-row" aria-label="Platform promises">
             <span><i>✓</i> Crowns never cost real money</span>
             <span><i>✓</i> One secure Discord login</span>
           </div>
         </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="realm-ring realm-ring-one" />
-          <div className="realm-ring realm-ring-two" />
-          <div className="realm-core"><span>RFL</span></div>
-          <div className="realm-glow" />
-        </div>
+      </section>
+
+      <section className="home-quick-grid" aria-label="Explore Realm Fighting League">
+        <Link className="home-quick-card quick-live" href={featuredEvent ? `/live/${featuredEvent.id}` : "/live"}>
+          <span className="quick-card-label"><i /> {featuredEvent?.status === "LIVE" ? "Live event" : "Fight night"}</span>
+          <strong>{featuredEvent?.title ?? "The next battle awaits"}</strong>
+          <small>{featuredFight ? `${featuredFight.redFighter.name} vs ${featuredFight.blueFighter.name}` : "See events, matchups, and live results."}</small>
+          <b>Watch live <span>→</span></b>
+        </Link>
+        <Link className="home-quick-card quick-crowns" href={session?.user.profileCompletedAt ? "/play" : "/signin"}>
+          <span className="quick-card-label"><Crown /> Your Crowns</span>
+          <strong>{reward?.wallet?.balance.toLocaleString() ?? "Earn rewards"}</strong>
+          <small>Claim rewards and use your Crowns across RFL.</small>
+          <b>View wallet <span>→</span></b>
+        </Link>
+        <Link className="home-quick-card quick-casino" href={session?.user.profileCompletedAt ? "/casino/coin-flip" : "/signin"}>
+          <span className="quick-card-label">◉ Casino</span>
+          <strong>Play your way</strong>
+          <small>Coin Flip, Blackjack, and High-Low use Crowns only.</small>
+          <b>Play now <span>→</span></b>
+        </Link>
+        <Link className="home-quick-card quick-cards" href="/cards">
+          <span className="quick-card-label">◇ Cards</span>
+          <strong>Collect legends</strong>
+          <small>Open packs, build your collection, and trade.</small>
+          <b>Open packs <span>→</span></b>
+        </Link>
       </section>
 
       {reward && (
