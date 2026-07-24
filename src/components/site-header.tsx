@@ -6,6 +6,7 @@ import { Crown } from "./crown";
 import { endSession } from "@/features/auth/actions";
 import { prisma } from "@/lib/prisma";
 import { SiteNavigation } from "./site-navigation";
+import { SiteMobileMenu } from "./site-mobile-menu";
 
 export async function SiteHeader() {
   const session = await auth();
@@ -21,7 +22,6 @@ export async function SiteHeader() {
     ...(fighter ? [{ href: "/fight-requests", label: "Fight requests" }] : []),
     ...(session?.user.roles.some((role) => role === "ADMIN" || role === "FIGHTER_ANALYST") ? [{ href: "/admin/home", label: "Control center", match: ["/admin"] }] : []),
   ];
-  const mobileItems = navItems.filter(({ href }) => ["/", "/live", "/fighters", "/fight-requests", "/casino/coin-flip", "/cards", "/market"].includes(href));
 
   return (
     <header className="site-header">
@@ -51,7 +51,7 @@ export async function SiteHeader() {
           <Link className="button button-small" href="/signin">Sign in</Link>
         )}
       </div>
-      <SiteNavigation items={mobileItems.map((item) => ({ ...item, label: item.href === "/fight-requests" ? "Requests" : item.label }))} mobile />
+      <SiteMobileMenu items={navItems} />
     </header>
   );
 }

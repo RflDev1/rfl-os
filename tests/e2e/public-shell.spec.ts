@@ -24,9 +24,12 @@ test("production security headers are present", async ({ request }) => {
   expect(response.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
 });
 
-test("mobile visitors receive primary bottom navigation", async ({ page }, testInfo) => {
+test("mobile visitors receive a hamburger navigation without covering account controls", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile");
   await page.goto("/");
+  const menuButton = page.getByRole("button", { name: "Open navigation menu" });
+  await expect(menuButton).toBeVisible();
+  await menuButton.click();
   const navigation = page.getByRole("navigation", { name: "Mobile navigation" });
   await expect(navigation).toBeVisible();
   await expect(navigation.getByRole("link")).toHaveCount(5);
