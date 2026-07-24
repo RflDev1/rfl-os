@@ -2,6 +2,8 @@
 
 ## Code and infrastructure
 
+- [ ] Upgrade the temporary App Platform development database to production Managed PostgreSQL.
+- [ ] Change the fixed single-instance web plan if measured traffic requires horizontal scaling.
 - [ ] Confirm the `RflDev1/rfl-os` repository, `nyc` region, and initial sizing in `.do/app.yaml`.
 - [ ] Run `npm run deploy:check -- /absolute/path/to/production.env`.
 - [ ] Provision separate staging and production Managed PostgreSQL clusters.

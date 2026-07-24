@@ -2,6 +2,11 @@
 
 Realm Fighting League targets DigitalOcean App Platform, DigitalOcean Managed PostgreSQL, and DigitalOcean Spaces Standard Storage. Staging and production must use separate databases, Discord applications, bot tokens, domains, buckets, and secrets.
 
+> Current testing deployment: `.do/app.yaml` intentionally uses a $7 App
+> Platform development database and the fixed 1 GB web plan. Public registration
+> and production card uploads must remain disabled until the database is upgraded
+> to Managed PostgreSQL and the `CARD_IMAGE_*` variables are backed by Spaces.
+
 ## Production topology
 
 - One App Platform web service built from `Dockerfile`.
