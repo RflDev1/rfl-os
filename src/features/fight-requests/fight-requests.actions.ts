@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminSection } from "@/features/admin/authorization";
+import { nextFighterRank } from "@/features/fighters/ranking.service";
 import { auth } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -35,10 +36,16 @@ export async function assignFighterAction(formData: FormData) {
   const session = await requireAdminSection("REQUESTS");
   const parsed = assignFighterSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminDone(parsed.error.issues[0]?.message ?? "Check the fighter assignment.", true);
-  const fighter = await prisma.fighter.update({ where: { id: parsed.data.fighterId }, data: { userId: parsed.data.userId, rank: parsed.data.rank } }).catch(() => null);
-  if (!fighter) adminDone("That account or rank is already assigned.", true);
-  await prisma.adminAuditEntry.create({ data: { actorId: session.user.id, action: "FIGHTER_ACCOUNT_ASSIGNED", targetType: "Fighter", targetId: fighter.id, summary: { userId: parsed.data.userId, rank: parsed.data.rank } } });
-  adminDone("Fighter account and rank saved.");
+  const fighter = await prisma.$transaction(async (tx) => {
+    const existing = await tx.fighter.findUnique({ where: { id: parsed.data.fighterId }, select: { rank: true, userId: true } });
+    if (!existing || existing.userId) throw new Error("Fighter unavailable");
+    const rank = existing.rank ?? await nextFighterRank(tx);
+    const updated = await tx.fighter.update({ where: { id: parsed.data.fighterId }, data: { userId: parsed.data.userId, rank } });
+    await tx.adminAuditEntry.create({ data: { actorId: session.user.id, action: "FIGHTER_ACCOUNT_ASSIGNED", targetType: "Fighter", targetId: updated.id, summary: { userId: parsed.data.userId, rank, rankAssignedAutomatically: existing.rank === null } } });
+    return updated;
+  }).catch(() => null);
+  if (!fighter) adminDone("That account is already assigned or the fighter is unavailable.", true);
+  adminDone(`Fighter account saved at rank #${fighter.rank}.`);
 }
 
 export async function updateFighterStatusAction(formData: FormData) {

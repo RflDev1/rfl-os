@@ -36,7 +36,7 @@ export default async function AdminHomePage({
             <SearchableSelect name="userId" label="Registered player" options={eligibleUsers.map((user) => ({ value: user.id, label: user.displayName ?? user.name ?? "Unnamed player", details: "Active Discord account" }))} searchPlaceholder="Search player name…" placeholder="Choose an eligible player" help="Players already linked to a fighter are automatically excluded." />
             <label>Fighter name<input name="name" required maxLength={60} /></label>
             <label>Nickname<input name="nickname" maxLength={40} /></label>
-            <label>Official rank<input name="rank" type="number" min="1" max="9999" required placeholder="e.g. 10" /></label>
+            <p className="admin-guidance">Rank is assigned automatically after the current lowest-ranked fighter.</p>
             <div className="form-row three">
               <label>Wins<input name="wins" type="number" min="0" defaultValue="0" required /></label>
               <label>Losses<input name="losses" type="number" min="0" defaultValue="0" required /></label>

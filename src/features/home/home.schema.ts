@@ -6,7 +6,6 @@ const optionalText = (maximum: number) =>
 
 export const fighterSchema = z.object({
   userId: z.string().cuid(),
-  rank: z.coerce.number().int().min(1).max(9999),
   name,
   nickname: optionalText(40),
   wins: z.coerce.number().int().min(0).max(999),

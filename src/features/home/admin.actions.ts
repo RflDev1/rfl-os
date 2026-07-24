@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSection } from "@/features/admin/authorization";
+import { nextFighterRank } from "@/features/fighters/ranking.service";
 import { announcementSchema, contentIdSchema, eventSchema, eventVisibilitySchema, fightSchema, fighterSchema } from "./home.schema";
 
 function fail(message: string): never {
@@ -25,8 +26,12 @@ export async function createFighter(formData: FormData) {
     select: { id: true },
   });
   if (!eligibleUser) fail("Choose an active Discord player who is not already assigned to a fighter.");
-  await prisma.fighter.create({ data: parsed.data }).catch(() => fail("That player or rank is already assigned."));
-  done("Fighter added.");
+  const fighter = await prisma.$transaction(async (tx) => {
+    const rank = await nextFighterRank(tx);
+    return tx.fighter.create({ data: { ...parsed.data, rank } });
+  }).catch(() => null);
+  if (!fighter) fail("That player is already assigned or the fighter could not be created.");
+  done(`Fighter added at rank #${fighter.rank}.`);
 }
 
 export async function createEvent(formData: FormData) {
