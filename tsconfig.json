@@ -1,0 +1,56 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    ".next/dev/dev/types/**/*.ts",
+    ".next-e2e-50301/dev/types/**/*.ts",
+    ".next-e2e-50301/dev/dev/types/**/*.ts",
+    ".next-e2e-50415/dev/types/**/*.ts",
+    ".next-e2e-50415/dev/dev/types/**/*.ts",
+    ".next-e2e-51227/dev/types/**/*.ts",
+    ".next-e2e-51227/dev/dev/types/**/*.ts",
+    ".next-e2e-51437/dev/types/**/*.ts",
+    ".next-e2e-51437/dev/dev/types/**/*.ts",
+    ".next-e2e-51600/dev/types/**/*.ts",
+    ".next-e2e-51600/dev/dev/types/**/*.ts",
+    ".next-e2e-51763/dev/types/**/*.ts",
+    ".next-e2e-51763/dev/dev/types/**/*.ts",
+    ".next-e2e-52549/dev/types/**/*.ts",
+    ".next-e2e-52549/dev/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

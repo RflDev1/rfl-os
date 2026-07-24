@@ -1,0 +1,189 @@
+name: rfl
+region: nyc
+domains:
+  - domain: playrfl.com
+    type: PRIMARY
+    minimum_tls_version: "1.2"
+services:
+  - name: web
+    dockerfile_path: Dockerfile
+    github:
+      repo: RflDev1/rfl-os
+      branch: main
+      deploy_on_push: false
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      initial_delay_seconds: 20
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 5
+      http_path: /api/health/ready
+      port: 8080
+    liveness_health_check:
+      initial_delay_seconds: 30
+      period_seconds: 15
+      timeout_seconds: 5
+      failure_threshold: 4
+      http_path: /api/health/live
+      port: 8080
+    routes:
+      - path: /
+    envs:
+      - key: APP_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: https://playrfl.com
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DIRECT_DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: AUTH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: DISCORD_CLIENT_ID
+        scope: RUN_TIME
+        type: GENERAL
+      - key: DISCORD_CLIENT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: DISCORD_BOT_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: DISCORD_API_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: https://discord.com/api/v10
+      - key: DAILY_REWARD_AMOUNT
+        scope: RUN_TIME
+        type: GENERAL
+        value: "100"
+      - key: COIN_FLIP_MIN_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: COIN_FLIP_MAX_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "1000"
+      - key: COIN_FLIP_PAYOUT_BPS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "20000"
+      - key: COIN_FLIP_MAX_PLAYS_PER_MINUTE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "20"
+      - key: BLACKJACK_MIN_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: BLACKJACK_MAX_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "1000"
+      - key: BLACKJACK_PAYOUT_BPS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "20000"
+      - key: BLACKJACK_NATURAL_PAYOUT_BPS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "25000"
+      - key: BLACKJACK_MAX_ROUNDS_PER_MINUTE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: HIGH_LOW_MIN_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: HIGH_LOW_MAX_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "1000"
+      - key: HIGH_LOW_TARGET_RETURN_BPS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "9500"
+      - key: HIGH_LOW_MAX_STEPS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "7"
+      - key: HIGH_LOW_MAX_ROUNDS_PER_MINUTE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: BET_MIN_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: BET_MAX_WAGER
+        scope: RUN_TIME
+        type: GENERAL
+        value: "5000"
+      - key: BET_MAX_PLACEMENTS_PER_MINUTE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "20"
+      - key: PACK_MAX_OPENINGS_PER_MINUTE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: MARKET_MIN_PRICE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: MARKET_MAX_PRICE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "100000"
+      - key: FIGHT_REQUEST_RANK_RANGE
+        scope: RUN_TIME
+        type: GENERAL
+        value: "5"
+      - key: BOOTSTRAP_ADMIN_DISCORD_ID
+        scope: RUN_TIME
+        type: GENERAL
+      - key: CARD_IMAGE_STORAGE_ENDPOINT
+        scope: RUN_TIME
+        type: GENERAL
+      - key: CARD_IMAGE_STORAGE_REGION
+        scope: RUN_TIME
+        type: GENERAL
+      - key: CARD_IMAGE_STORAGE_BUCKET
+        scope: RUN_TIME
+        type: GENERAL
+      - key: CARD_IMAGE_STORAGE_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: CARD_IMAGE_STORAGE_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: CARD_IMAGE_PUBLIC_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+jobs:
+  - name: database-migrate
+    kind: PRE_DEPLOY
+    dockerfile_path: Dockerfile.migrate
+    github:
+      repo: RflDev1/rfl-os
+      branch: main
+      deploy_on_push: false
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DIRECT_DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED

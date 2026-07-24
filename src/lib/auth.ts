@@ -1,0 +1,110 @@
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import NextAuth from "next-auth";
+import Discord from "next-auth/providers/discord";
+import { prisma } from "@/lib/prisma";
+import { getEnv } from "@/lib/env";
+
+const env = getEnv();
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "database" },
+  providers: [
+    Discord({
+      clientId: env.DISCORD_CLIENT_ID,
+      clientSecret: env.DISCORD_CLIENT_SECRET,
+      authorization: { params: { scope: "identify" } },
+    }),
+  ],
+  pages: { signIn: "/signin", error: "/signin" },
+  trustHost: true,
+  callbacks: {
+    async signIn({ user, account }) {
+      if (!user.id) return false;
+      const storedUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { status: true },
+      });
+      if (storedUser?.status === "SUSPENDED" || storedUser?.status === "DEACTIVATED") return false;
+
+      if (
+        storedUser &&
+        account?.provider === "discord" &&
+        env.BOOTSTRAP_ADMIN_DISCORD_ID === account.providerAccountId
+      ) {
+        await prisma.userRole.upsert({
+          where: { userId_role: { userId: user.id, role: "ADMIN" } },
+          update: {},
+          create: { userId: user.id, role: "ADMIN" },
+        });
+      }
+
+      return true;
+    },
+    async session({ session, user }) {
+      const account = await prisma.user.findUnique({
+        where: { id: user.id },
+        include: { roles: { select: { role: true } }, wallet: true },
+      });
+
+      if (!account) return session;
+      session.user.id = account.id;
+      session.user.displayName = account.displayName;
+      session.user.status = account.status;
+      session.user.profileCompletedAt = account.profileCompletedAt;
+      session.user.roles = account.roles.map(({ role }) => role);
+      session.user.walletBalance = account.wallet?.balance ?? 0;
+      return session;
+    },
+    async redirect({ url }) {
+      const origin = new URL(env.APP_URL);
+      if (url.startsWith("/")) return new URL(url, origin).toString();
+      const destination = new URL(url);
+      return destination.origin === origin.origin ? destination.toString() : origin.toString();
+    },
+  },
+  events: {
+    async createUser({ user }) {
+      if (!user.id) throw new Error("Auth adapter created a user without an ID.");
+      const userId = user.id;
+      await prisma.$transaction([
+        prisma.wallet.upsert({
+          where: { userId },
+          update: {},
+          create: { userId },
+        }),
+        prisma.userRole.upsert({
+          where: { userId_role: { userId, role: "PLAYER" } },
+          update: {},
+          create: { userId, role: "PLAYER" },
+        }),
+      ]);
+    },
+    async linkAccount({ account }) {
+      await prisma.$transaction(async (tx) => {
+        await tx.account.update({
+          where: {
+            provider_providerAccountId: {
+              provider: account.provider,
+              providerAccountId: account.providerAccountId,
+            },
+          },
+          data: { access_token: null, refresh_token: null, id_token: null },
+        });
+
+        if (
+          account.userId &&
+          account.provider === "discord" &&
+          env.BOOTSTRAP_ADMIN_DISCORD_ID === account.providerAccountId
+        ) {
+          const userId = account.userId;
+          await tx.userRole.upsert({
+            where: { userId_role: { userId, role: "ADMIN" } },
+            update: {},
+            create: { userId, role: "ADMIN" },
+          });
+        }
+      });
+    },
+  },
+});

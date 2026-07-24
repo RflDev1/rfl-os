@@ -1,0 +1,710 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum Role {
+  PLAYER
+  MODERATOR
+  ADMIN
+}
+
+enum EventStatus {
+  DRAFT
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum FightStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum FightResult {
+  RED_WIN
+  BLUE_WIN
+  DRAW
+  NO_CONTEST
+}
+
+enum FighterStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum FightUpdateKind {
+  ANNOUNCEMENT
+  FIGHT
+  RESULT
+}
+
+enum WalletReason {
+  DAILY_REWARD
+  ADMIN_ADJUSTMENT
+  COIN_FLIP_WAGER
+  COIN_FLIP_WIN
+  BLACKJACK_WAGER
+  BLACKJACK_PAYOUT
+  HIGH_LOW_WAGER
+  HIGH_LOW_PAYOUT
+  BET_WAGER
+  BET_PAYOUT
+  BET_REFUND
+  PACK_PURCHASE
+  MARKET_PURCHASE
+  MARKET_SALE
+}
+
+enum MarketListingStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+}
+
+enum FightRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum CardRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum BetMarketStatus {
+  OPEN
+  LOCKED
+  SETTLED
+  VOID
+}
+
+enum BetSelection {
+  RED
+  BLUE
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+}
+
+enum CoinSide {
+  HEADS
+  TAILS
+}
+
+enum BlackjackStatus {
+  ACTIVE
+  SETTLED
+}
+
+enum BlackjackOutcome {
+  PLAYER_BLACKJACK
+  PLAYER_WIN
+  DEALER_WIN
+  PUSH
+  PLAYER_BUST
+  DEALER_BUST
+}
+
+enum BlackjackMove {
+  DEAL
+  HIT
+  STAND
+  DOUBLE
+}
+
+enum HighLowStatus {
+  ACTIVE
+  SETTLED
+}
+
+enum HighLowGuess {
+  HIGHER
+  LOWER
+}
+
+enum HighLowOutcome {
+  CASHED_OUT
+  WRONG_GUESS
+  TIE
+  MAX_STEPS
+}
+
+model User {
+  id                 String       @id @default(cuid())
+  name               String?
+  displayName        String?      @unique @map("display_name")
+  email              String?      @unique
+  emailVerified      DateTime?    @map("email_verified")
+  image              String?
+  status             UserStatus   @default(ACTIVE)
+  profileCompletedAt DateTime?    @map("profile_completed_at")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+  accounts           Account[]
+  sessions           Session[]
+  roles              UserRole[]
+  wallet             Wallet?
+  dailyRewardClaims  DailyRewardClaim[]
+  adminAuditEntries  AdminAuditEntry[] @relation("AuditActor")
+  coinFlipRounds     CoinFlipRound[]
+  blackjackRounds    BlackjackRound[]
+  highLowRounds      HighLowRound[]
+  bets               Bet[]
+  settledMarkets     BetMarket[] @relation("MarketSettlementActor")
+  cardInstances      CardInstance[]
+  packOpenings       PackOpening[]
+  marketListings     MarketListing[] @relation("ListingSeller")
+  marketPurchases    MarketSale[] @relation("SaleBuyer")
+  marketSales        MarketSale[] @relation("SaleSeller")
+  fighterProfile     Fighter?
+  fightRequests      FightRequest[] @relation("RequestSubmitter")
+  notificationJobs   DiscordNotification[]
+
+  @@map("users")
+}
+
+model Event {
+  id        String      @id @default(cuid())
+  title     String
+  subtitle  String?
+  venue     String?
+  startsAt  DateTime    @map("starts_at")
+  status    EventStatus @default(DRAFT)
+  featured  Boolean     @default(false)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  fights    Fight[]
+  updates   FightUpdate[]
+
+  @@index([status, startsAt])
+  @@map("events")
+}
+
+model Fighter {
+  id        String   @id @default(cuid())
+  userId    String?  @unique @map("user_id")
+  rank      Int?     @unique
+  name      String
+  nickname  String?
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  draws     Int      @default(0)
+  status    FighterStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  redFights  Fight[] @relation("RedFighter")
+  blueFights Fight[] @relation("BlueFighter")
+  cardDefinitions CardDefinition[]
+  user       User? @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sentRequests FightRequest[] @relation("RequestingFighter")
+  receivedRequests FightRequest[] @relation("OpponentFighter")
+
+  @@index([status, name])
+  @@map("fighters")
+}
+
+model Fight {
+  id            String      @id @default(cuid())
+  eventId       String      @map("event_id")
+  redFighterId  String      @map("red_fighter_id")
+  blueFighterId String      @map("blue_fighter_id")
+  position      Int         @default(1)
+  status        FightStatus @default(SCHEDULED)
+  scheduledAt   DateTime?   @map("scheduled_at")
+  result        FightResult?
+  resultSummary String?     @map("result_summary")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  redFighter    Fighter     @relation("RedFighter", fields: [redFighterId], references: [id], onDelete: Restrict)
+  blueFighter   Fighter     @relation("BlueFighter", fields: [blueFighterId], references: [id], onDelete: Restrict)
+  updates        FightUpdate[]
+  market         BetMarket?
+  request        FightRequest?
+
+  @@index([eventId, position])
+  @@map("fights")
+}
+
+model FightUpdate {
+  id        String          @id @default(cuid())
+  eventId   String          @map("event_id")
+  fightId   String?         @map("fight_id")
+  kind      FightUpdateKind @default(ANNOUNCEMENT)
+  message   String
+  createdAt DateTime        @default(now()) @map("created_at")
+  event     Event           @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  fight     Fight?          @relation(fields: [fightId], references: [id], onDelete: Restrict)
+
+  @@index([eventId, createdAt])
+  @@map("fight_updates")
+}
+
+model BetMarket {
+  id             String          @id @default(cuid())
+  fightId        String          @unique @map("fight_id")
+  status         BetMarketStatus @default(OPEN)
+  redOddsBps     Int             @map("red_odds_bps")
+  blueOddsBps    Int             @map("blue_odds_bps")
+  settledById    String?         @map("settled_by_id")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  settledAt      DateTime?       @map("settled_at")
+  fight          Fight           @relation(fields: [fightId], references: [id], onDelete: Restrict)
+  settledBy      User?           @relation("MarketSettlementActor", fields: [settledById], references: [id], onDelete: Restrict)
+  bets           Bet[]
+
+  @@index([status, createdAt])
+  @@map("bet_markets")
+}
+
+model Bet {
+  id               String       @id @default(cuid())
+  userId           String       @map("user_id")
+  marketId         String       @map("market_id")
+  selection        BetSelection
+  stake            Int
+  acceptedOddsBps  Int          @map("accepted_odds_bps")
+  possiblePayout   Int          @map("possible_payout")
+  payout           Int          @default(0)
+  balanceAfter     Int          @map("balance_after")
+  status           BetStatus    @default(PENDING)
+  idempotencyKey   String       @map("idempotency_key")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  settledAt        DateTime?    @map("settled_at")
+  user             User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  market           BetMarket    @relation(fields: [marketId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([marketId, status])
+  @@map("bets")
+}
+
+model CardSet {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  releasedAt  DateTime @map("released_at")
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  definitions CardDefinition[]
+  packs       PackDefinition[]
+
+  @@index([active, releasedAt])
+  @@map("card_sets")
+}
+
+model CardDefinition {
+  id          String     @id @default(cuid())
+  setId       String     @map("set_id")
+  fighterId   String?    @map("fighter_id")
+  name        String
+  subtitle    String?
+  rarity      CardRarity
+  cardNumber  Int        @map("card_number")
+  imageUrl    String?    @map("image_url")
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  set         CardSet    @relation(fields: [setId], references: [id], onDelete: Restrict)
+  fighter     Fighter?   @relation(fields: [fighterId], references: [id], onDelete: Restrict)
+  instances   CardInstance[]
+
+  @@unique([setId, cardNumber])
+  @@index([setId, rarity, active])
+  @@map("card_definitions")
+}
+
+model PackDefinition {
+  id               String   @id @default(cuid())
+  setId            String   @map("set_id")
+  name             String
+  description      String?
+  price            Int
+  cardsPerPack     Int      @map("cards_per_pack")
+  commonWeight     Int      @map("common_weight")
+  rareWeight       Int      @map("rare_weight")
+  epicWeight       Int      @map("epic_weight")
+  legendaryWeight  Int      @map("legendary_weight")
+  dropTableVersion Int      @default(1) @map("drop_table_version")
+  active           Boolean  @default(false)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  set              CardSet  @relation(fields: [setId], references: [id], onDelete: Restrict)
+  openings         PackOpening[]
+
+  @@index([active, createdAt])
+  @@map("pack_definitions")
+}
+
+model PackOpening {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  packId           String   @map("pack_id")
+  price            Int
+  balanceAfter     Int      @map("balance_after")
+  dropTableVersion Int      @map("drop_table_version")
+  idempotencyKey   String   @map("idempotency_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+  openedAt         DateTime @default(now()) @map("opened_at")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pack             PackDefinition @relation(fields: [packId], references: [id], onDelete: Restrict)
+  cards            CardInstance[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@map("pack_openings")
+}
+
+model CardInstance {
+  id           String         @id @default(cuid())
+  definitionId String         @map("definition_id")
+  ownerId      String         @map("owner_id")
+  openingId    String         @map("opening_id")
+  serialNumber Int            @unique @default(autoincrement()) @map("serial_number")
+  acquiredAt   DateTime       @default(now()) @map("acquired_at")
+  definition   CardDefinition @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  owner        User           @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  opening      PackOpening    @relation(fields: [openingId], references: [id], onDelete: Restrict)
+  listings     MarketListing[]
+  sales        MarketSale[]
+
+  @@index([ownerId, acquiredAt])
+  @@index([definitionId, ownerId])
+  @@map("card_instances")
+}
+
+model MarketListing {
+  id             String              @id @default(cuid())
+  cardInstanceId String              @map("card_instance_id")
+  sellerId       String              @map("seller_id")
+  price          Int
+  status         MarketListingStatus @default(ACTIVE)
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  closedAt       DateTime?           @map("closed_at")
+  card           CardInstance        @relation(fields: [cardInstanceId], references: [id], onDelete: Restrict)
+  seller         User                @relation("ListingSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  sale           MarketSale?
+
+  @@index([status, createdAt])
+  @@index([sellerId, status, createdAt])
+  @@index([cardInstanceId, createdAt])
+  @@map("market_listings")
+}
+
+model MarketSale {
+  id             String         @id @default(cuid())
+  listingId      String         @unique @map("listing_id")
+  cardInstanceId String         @map("card_instance_id")
+  buyerId        String         @map("buyer_id")
+  sellerId       String         @map("seller_id")
+  price          Int
+  fee            Int            @default(0)
+  idempotencyKey String         @map("idempotency_key")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  listing        MarketListing  @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  card           CardInstance   @relation(fields: [cardInstanceId], references: [id], onDelete: Restrict)
+  buyer          User           @relation("SaleBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  seller         User           @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+
+  @@unique([buyerId, idempotencyKey])
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+  @@map("market_sales")
+}
+
+model FightRequest {
+  id                 String             @id @default(cuid())
+  requesterFighterId String             @map("requester_fighter_id")
+  opponentFighterId  String             @map("opponent_fighter_id")
+  requestedById      String             @map("requested_by_id")
+  requesterRank      Int                @map("requester_rank")
+  opponentRank       Int                @map("opponent_rank")
+  status             FightRequestStatus @default(PENDING)
+  fightId            String?            @unique @map("fight_id")
+  reviewedById       String?            @map("reviewed_by_id")
+  reviewedAt         DateTime?           @map("reviewed_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  requester          Fighter             @relation("RequestingFighter", fields: [requesterFighterId], references: [id], onDelete: Restrict)
+  opponent           Fighter             @relation("OpponentFighter", fields: [opponentFighterId], references: [id], onDelete: Restrict)
+  requestedBy        User                @relation("RequestSubmitter", fields: [requestedById], references: [id], onDelete: Restrict)
+  fight              Fight?              @relation(fields: [fightId], references: [id], onDelete: Restrict)
+  notifications      DiscordNotification[]
+
+  @@index([status, createdAt])
+  @@index([requesterFighterId, createdAt])
+  @@index([opponentFighterId, createdAt])
+  @@map("fight_requests")
+}
+
+model DiscordNotification {
+  id              String                     @id @default(cuid())
+  fightRequestId  String                     @map("fight_request_id")
+  recipientUserId String                     @map("recipient_user_id")
+  discordUserId   String                     @map("discord_user_id")
+  status          NotificationDeliveryStatus @default(PENDING)
+  attempts        Int                        @default(0)
+  lastError       String?                    @map("last_error")
+  createdAt       DateTime                   @default(now()) @map("created_at")
+  sentAt          DateTime?                  @map("sent_at")
+  request         FightRequest               @relation(fields: [fightRequestId], references: [id], onDelete: Restrict)
+  recipient       User                       @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+
+  @@unique([fightRequestId, recipientUserId])
+  @@index([status, createdAt])
+  @@map("discord_notifications")
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  message   String
+  linkLabel String?  @map("link_label")
+  linkUrl   String?  @map("link_url")
+  active    Boolean  @default(true)
+  startsAt  DateTime @default(now()) @map("starts_at")
+  endsAt    DateTime? @map("ends_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([active, startsAt])
+  @@map("announcements")
+}
+
+model Account {
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@map("verification_tokens")
+}
+
+model UserRole {
+  userId    String   @map("user_id")
+  role      Role     @default(PLAYER)
+  grantedAt DateTime @default(now()) @map("granted_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, role])
+  @@map("user_roles")
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  balance   Int      @default(0)
+  version   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  entries   WalletEntry[]
+
+  @@map("wallets")
+}
+
+model WalletEntry {
+  id             String       @id @default(cuid())
+  walletId       String       @map("wallet_id")
+  delta          Int
+  balanceAfter   Int          @map("balance_after")
+  reason         WalletReason
+  referenceId    String?      @map("reference_id")
+  idempotencyKey String       @map("idempotency_key")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  wallet         Wallet       @relation(fields: [walletId], references: [id], onDelete: Restrict)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([walletId, createdAt])
+  @@map("wallet_entries")
+}
+
+model DailyRewardClaim {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  rewardDate DateTime @db.Date @map("reward_date")
+  amount     Int
+  claimedAt  DateTime @default(now()) @map("claimed_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, rewardDate])
+  @@index([userId, claimedAt])
+  @@map("daily_reward_claims")
+}
+
+model AdminAuditEntry {
+  id         String   @id @default(cuid())
+  actorId    String   @map("actor_id")
+  action     String
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  summary    Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  actor      User     @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@map("admin_audit_entries")
+}
+
+model CoinFlipRound {
+  id                  String   @id @default(cuid())
+  userId              String   @map("user_id")
+  choice              CoinSide
+  result              CoinSide
+  wager               Int
+  payout              Int
+  won                 Boolean
+  balanceAfter        Int      @map("balance_after")
+  payoutBasisPoints   Int      @map("payout_basis_points")
+  randomSourceVersion Int      @default(1) @map("random_source_version")
+  idempotencyKey      String   @map("idempotency_key")
+  createdAt           DateTime @default(now()) @map("created_at")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@map("coin_flip_rounds")
+}
+
+model BlackjackRound {
+  id                  String            @id @default(cuid())
+  userId              String            @map("user_id")
+  wager               Int
+  totalWager          Int               @map("total_wager")
+  payout              Int               @default(0)
+  balanceAfter        Int               @map("balance_after")
+  status              BlackjackStatus   @default(ACTIVE)
+  outcome             BlackjackOutcome?
+  deck                Json
+  playerCards         Json              @map("player_cards")
+  dealerCards         Json              @map("dealer_cards")
+  payoutBasisPoints   Int               @map("payout_basis_points")
+  blackjackPayoutBps  Int               @map("blackjack_payout_bps")
+  rulesVersion        Int               @default(1) @map("rules_version")
+  version             Int               @default(0)
+  idempotencyKey      String            @map("idempotency_key")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  settledAt           DateTime?         @map("settled_at")
+  user                User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  actions             BlackjackAction[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@map("blackjack_rounds")
+}
+
+model BlackjackAction {
+  id             String        @id @default(cuid())
+  roundId        String        @map("round_id")
+  move           BlackjackMove
+  idempotencyKey String        @map("idempotency_key")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  round          BlackjackRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+
+  @@unique([roundId, idempotencyKey])
+  @@index([roundId, createdAt])
+  @@map("blackjack_actions")
+}
+
+model HighLowRound {
+  id                  String          @id @default(cuid())
+  userId              String          @map("user_id")
+  wager               Int
+  payout              Int             @default(0)
+  balanceAfter        Int             @map("balance_after")
+  status              HighLowStatus   @default(ACTIVE)
+  outcome             HighLowOutcome?
+  deck                Json
+  currentCard         String          @map("current_card")
+  step                Int             @default(0)
+  multiplierBps       Int             @default(10000) @map("multiplier_bps")
+  targetReturnBps     Int             @map("target_return_bps")
+  maxSteps            Int             @map("max_steps")
+  rulesVersion        Int             @default(1) @map("rules_version")
+  idempotencyKey      String          @map("idempotency_key")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  settledAt           DateTime?       @map("settled_at")
+  user                User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  guesses             HighLowGuessRecord[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@map("high_low_rounds")
+}
+
+model HighLowGuessRecord {
+  id                  String       @id @default(cuid())
+  roundId             String       @map("round_id")
+  guess               HighLowGuess?
+  previousCard        String       @map("previous_card")
+  revealedCard        String?      @map("revealed_card")
+  correct             Boolean?
+  multiplierAfterBps  Int          @map("multiplier_after_bps")
+  idempotencyKey      String       @map("idempotency_key")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  round               HighLowRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+
+  @@unique([roundId, idempotencyKey])
+  @@index([roundId, createdAt])
+  @@map("high_low_guesses")
+}

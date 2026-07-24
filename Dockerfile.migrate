@@ -1,0 +1,9 @@
+# syntax=docker/dockerfile:1
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json package-lock.json prisma.config.ts ./
+COPY prisma ./prisma
+RUN npm ci --include=dev && npm cache clean --force
+USER node
+CMD ["npm", "run", "db:deploy"]

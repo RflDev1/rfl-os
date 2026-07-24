@@ -1,0 +1,23 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = { title: "Control center" };
+
+export default async function AdminTodayPage() {
+  const now = new Date();
+  const [liveEvent, nextEvent, pendingRequests, failedNotifications, settlementQueue, suspendedUsers, activeListings, walletTotals, recentAudit, databaseHealth] = await Promise.all([
+    prisma.event.findFirst({ where: { status: "LIVE" }, include: { fights: { orderBy: { position: "asc" } } } }),
+    prisma.event.findFirst({ where: { status: "SCHEDULED", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } }),
+    prisma.fightRequest.count({ where: { status: "PENDING" } }),
+    prisma.discordNotification.count({ where: { status: "FAILED" } }),
+    prisma.betMarket.count({ where: { status: { in: ["OPEN", "LOCKED"] }, fight: { status: "COMPLETED" } } }),
+    prisma.user.count({ where: { status: "SUSPENDED" } }),
+    prisma.marketListing.count({ where: { status: "ACTIVE" } }),
+    prisma.wallet.aggregate({ _sum: { balance: true }, _count: true }),
+    prisma.adminAuditEntry.findMany({ include: { actor: { select: { displayName: true } } }, orderBy: { createdAt: "desc" }, take: 8 }),
+    prisma.$queryRaw<Array<{ ok: number }>>`SELECT 1 AS ok`.then(() => true).catch(() => false),
+  ]);
+  const attention = pendingRequests + failedNotifications + settlementQueue;
+  return <main className="admin-page admin-today"><div className="admin-title"><div><p>Operations overview</p><h1>Today</h1></div><span>{now.toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}</span></div><section className="admin-health-strip"><div className={databaseHealth ? "healthy" : "unhealthy"}><span />Database<strong>{databaseHealth ? "Operational" : "Unavailable"}</strong></div><div><span />Attention queue<strong>{attention}</strong></div><div><span />Crown supply<strong>{(walletTotals._sum.balance ?? 0).toLocaleString()}</strong></div><div><span />Player wallets<strong>{walletTotals._count}</strong></div></section><div className="today-grid"><section className="admin-panel today-live"><div className="panel-heading"><span>01</span><div><h2>Fight night</h2><p>Current and next public event.</p></div></div>{liveEvent ? <div className="today-event"><b>LIVE</b><h3>{liveEvent.title}</h3><p>{liveEvent.fights.filter((fight) => fight.status === "COMPLETED").length} of {liveEvent.fights.length} fights completed</p><Link className="button button-primary" href="/admin/live">Open live operations</Link></div> : nextEvent ? <div className="today-event"><b>NEXT</b><h3>{nextEvent.title}</h3><p>{nextEvent.startsAt.toLocaleString("en-US")}</p><Link className="button button-ghost" href="/admin/live">Review event</Link></div> : <p className="admin-guidance">No live or scheduled event.</p>}</section><section className="admin-panel"><div className="panel-heading"><span>02</span><div><h2>Requires attention</h2><p>Items that can block player-facing workflows.</p></div></div><div className="attention-list"><Link href="/admin/requests"><span>Pending fight requests</span><strong>{pendingRequests}</strong></Link><Link href="/admin/requests"><span>Failed Discord deliveries</span><strong>{failedNotifications}</strong></Link><Link href="/admin/betting"><span>Markets awaiting settlement</span><strong>{settlementQueue}</strong></Link><Link href="/admin/users"><span>Suspended users</span><strong>{suspendedUsers}</strong></Link></div></section><section className="admin-panel"><div className="panel-heading"><span>03</span><div><h2>Platform activity</h2><p>Current operational inventory.</p></div></div><div className="attention-list"><Link href="/admin/marketplace"><span>Active marketplace listings</span><strong>{activeListings}</strong></Link><Link href="/admin/economy"><span>Total Crown supply</span><strong>{(walletTotals._sum.balance ?? 0).toLocaleString()}</strong></Link><Link href="/admin/rankings"><span>Rankings</span><strong>Review</strong></Link><Link href="/admin/settings"><span>Production settings</span><strong>View</strong></Link></div></section></div><section className="admin-panel today-audit"><div className="panel-heading"><span>04</span><div><h2>Recent admin activity</h2><p>Latest high-impact operational changes.</p></div></div>{recentAudit.map((entry) => <div key={entry.id}><time>{entry.createdAt.toLocaleString("en-US")}</time><strong>{entry.action.replaceAll("_", " ")}</strong><span>{entry.actor.displayName ?? "Admin"}</span><Link href={`/admin/audit?target=${entry.targetId}`}>Inspect →</Link></div>)}</section></main>;
+}
