@@ -7,17 +7,38 @@ import { getEnv } from "@/lib/env";
 const env = getEnv();
 
 async function requireRflGuildMembership(discordUserId: string, accessToken?: string) {
-  if (!env.DISCORD_GUILD_ID || !accessToken) return false;
-  const response = await fetch(`${env.DISCORD_API_BASE_URL}/guilds/${env.DISCORD_GUILD_ID}/members/${discordUserId}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ access_token: accessToken }),
-    cache: "no-store",
-  });
-  return response.status === 201 || response.status === 204;
+  if (!env.DISCORD_GUILD_ID || !accessToken) {
+    console.error("[rfl-auth] Discord membership denied", {
+      reason: !env.DISCORD_GUILD_ID ? "missing_guild_id" : "missing_oauth_access_token",
+    });
+    return false;
+  }
+  try {
+    const response = await fetch(`${env.DISCORD_API_BASE_URL}/guilds/${env.DISCORD_GUILD_ID}/members/${discordUserId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ access_token: accessToken }),
+      cache: "no-store",
+    });
+    if (response.status === 201 || response.status === 204) return true;
+    const error = await response.json().catch(() => null) as { code?: number; message?: string } | null;
+    console.error("[rfl-auth] Discord membership denied", {
+      reason: "discord_api_rejected",
+      status: response.status,
+      code: error?.code,
+      message: error?.message,
+    });
+    return false;
+  } catch (error) {
+    console.error("[rfl-auth] Discord membership denied", {
+      reason: "discord_api_unreachable",
+      message: error instanceof Error ? error.message : "Unknown network error",
+    });
+    return false;
+  }
 }
 
 async function syncFighterAnalystRole(userId: string, discordUserId: string) {
@@ -65,7 +86,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         where: { id: user.id },
         select: { status: true },
       });
-      if (storedUser?.status === "SUSPENDED" || storedUser?.status === "DEACTIVATED") return false;
+      if (storedUser?.status === "SUSPENDED" || storedUser?.status === "DEACTIVATED") {
+        console.error("[rfl-auth] Account status denied sign-in", { status: storedUser.status });
+        return false;
+      }
 
       if (
         storedUser &&
