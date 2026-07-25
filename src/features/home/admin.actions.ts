@@ -6,6 +6,17 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSection } from "@/features/admin/authorization";
 import { nextFighterRank } from "@/features/fighters/ranking.service";
 import { announcementSchema, contentIdSchema, eventSchema, eventVisibilitySchema, fightSchema, fighterSchema } from "./home.schema";
+import { getEnv } from "@/lib/env";
+import { syncFightStreamChannel } from "@/features/discord/stream-channel";
+
+async function syncDiscordStream() {
+  const env = getEnv();
+  await syncFightStreamChannel({
+    apiBaseUrl: env.DISCORD_API_BASE_URL,
+    botToken: env.DISCORD_BOT_TOKEN,
+    guildId: env.DISCORD_GUILD_ID,
+  }).catch((error) => console.error("[rfl-discord] Fight Stream sync failed", error));
+}
 
 function fail(message: string): never {
   redirect(`/admin/home?error=${encodeURIComponent(message)}`);
@@ -43,6 +54,7 @@ export async function createEvent(formData: FormData) {
     if (parsed.data.featured) await tx.event.updateMany({ data: { featured: false } });
     await tx.event.create({ data: parsed.data });
   });
+  await syncDiscordStream();
   done("Event published to the home schedule.");
 }
 
@@ -73,6 +85,7 @@ export async function updateEventVisibility(formData: FormData) {
       data: { status: parsed.data.status, featured: parsed.data.featured },
     });
   });
+  await syncDiscordStream();
   done("Event publishing updated.");
 }
 

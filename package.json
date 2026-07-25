@@ -24,6 +24,7 @@
     "test:e2e": "tsx scripts/test-e2e.ts",
     "test:e2e:run": "playwright test",
     "deploy:check": "tsx scripts/deploy-preflight.ts",
+    "discord:register": "tsx --env-file=.env scripts/register-discord-commands.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy"

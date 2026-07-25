@@ -8,6 +8,7 @@ const schema = z.object({
   DISCORD_CLIENT_ID: z.string().min(1),
   DISCORD_CLIENT_SECRET: z.string().min(1),
   DISCORD_BOT_TOKEN: z.string().min(1),
+  DISCORD_PUBLIC_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^[a-fA-F0-9]{64}$/).optional()),
   DISCORD_API_BASE_URL: z.string().url(),
   DAILY_REWARD_AMOUNT: z.coerce.number().int().min(1).max(100_000),
   COIN_FLIP_MIN_WAGER: z.coerce.number().int().min(1).max(100_000),

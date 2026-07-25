@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getLiveEventStateSignature } from "@/features/live/live-state";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const encoder = new TextEncoder();
   let timer: ReturnType<typeof setInterval> | undefined;
   let closed = false;
+  let stateSignature: string | undefined;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -19,10 +21,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       timer = setInterval(async () => {
         if (closed) return;
         try {
-          const updates = await prisma.fightUpdate.findMany({ where: { eventId, createdAt: { gt: cursor } }, orderBy: { createdAt: "asc" }, take: 50 });
+          const [updates, nextStateSignature] = await Promise.all([
+            prisma.fightUpdate.findMany({ where: { eventId, createdAt: { gt: cursor } }, orderBy: { createdAt: "asc" }, take: 50 }),
+            getLiveEventStateSignature(eventId),
+          ]);
           for (const update of updates) {
             cursor = update.createdAt;
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...update, createdAt: update.createdAt.toISOString() })}\n\n`));
+          }
+          if (stateSignature === undefined) {
+            stateSignature = nextStateSignature;
+            controller.enqueue(encoder.encode(`event: state-ready\ndata: ${JSON.stringify({ signature: stateSignature })}\n\n`));
+          } else if (nextStateSignature !== stateSignature) {
+            stateSignature = nextStateSignature;
+            controller.enqueue(encoder.encode(`event: state\ndata: ${JSON.stringify({ signature: stateSignature })}\n\n`));
           }
           controller.enqueue(encoder.encode(": keepalive\n\n"));
         } catch {
@@ -44,4 +56,3 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   });
   return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" } });
 }
-

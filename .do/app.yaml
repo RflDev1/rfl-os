@@ -67,6 +67,9 @@ services:
       - key: DISCORD_BOT_TOKEN
         scope: RUN_TIME
         type: SECRET
+      - key: DISCORD_PUBLIC_KEY
+        scope: RUN_TIME
+        type: GENERAL
       - key: DISCORD_API_BASE_URL
         scope: RUN_TIME
         type: GENERAL

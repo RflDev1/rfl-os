@@ -6,6 +6,17 @@ import { requireAdminSection } from "@/features/admin/authorization";
 import { prisma } from "@/lib/prisma";
 import { fightStateSchema, liveEventStateSchema, liveUpdateSchema } from "./live.schema";
 import { completeFight, FightResultStateError } from "./fight-results.service";
+import { getEnv } from "@/lib/env";
+import { syncFightStreamChannel } from "@/features/discord/stream-channel";
+
+async function syncDiscordStream() {
+  const env = getEnv();
+  await syncFightStreamChannel({
+    apiBaseUrl: env.DISCORD_API_BASE_URL,
+    botToken: env.DISCORD_BOT_TOKEN,
+    guildId: env.DISCORD_GUILD_ID,
+  }).catch((error) => console.error("[rfl-discord] Fight Stream sync failed", error));
+}
 
 function fail(message: string): never {
   redirect(`/admin/live?error=${encodeURIComponent(message)}`);
@@ -48,6 +59,7 @@ export async function updateFightState(formData: FormData) {
     revalidatePath(`/fighters/${existing.blueFighterId}`);
     revalidatePath("/fighters");
     revalidatePath("/admin/rankings");
+    await syncDiscordStream();
     done("Official result recorded. Fighter records and rankings are updated.");
   }
   if (existing.status === "COMPLETED") fail("Completed fight results cannot be changed from this control.");
@@ -66,6 +78,7 @@ export async function updateFightState(formData: FormData) {
     }
   });
   revalidatePath(`/live/${existing.eventId}`);
+  await syncDiscordStream();
   done("Fight state updated.");
 }
 
@@ -78,5 +91,6 @@ export async function updateLiveEventState(formData: FormData) {
     await tx.event.update({ where: { id: parsed.data.eventId }, data: { status: parsed.data.status } });
   });
   revalidatePath(`/live/${parsed.data.eventId}`);
+  await syncDiscordStream();
   done("Event state updated.");
 }

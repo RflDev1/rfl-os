@@ -3,7 +3,7 @@ import path from "node:path";
 
 const required = [
   "APP_URL", "DATABASE_URL", "DIRECT_DATABASE_URL", "AUTH_SECRET",
-  "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_BOT_TOKEN",
+  "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_BOT_TOKEN", "DISCORD_PUBLIC_KEY",
   "DISCORD_API_BASE_URL", "DAILY_REWARD_AMOUNT", "COIN_FLIP_MIN_WAGER",
   "COIN_FLIP_MAX_WAGER", "COIN_FLIP_PAYOUT_BPS",
   "COIN_FLIP_MAX_PLAYS_PER_MINUTE", "BLACKJACK_MIN_WAGER",
@@ -59,6 +59,7 @@ async function main() {
     throw new Error("AUTH_SECRET must be a non-placeholder secret of at least 32 characters.");
   }
   if (!/^\d{17,20}$/.test(values.DISCORD_CLIENT_ID)) throw new Error("DISCORD_CLIENT_ID must be a Discord snowflake.");
+  if (!/^[a-fA-F0-9]{64}$/.test(values.DISCORD_PUBLIC_KEY)) throw new Error("DISCORD_PUBLIC_KEY must be the 64-character key from Discord General Information.");
   if (![values.DATABASE_URL, values.DIRECT_DATABASE_URL].every((value) => /^postgres(ql)?:\/\//.test(value))) {
     throw new Error("DATABASE_URL and DIRECT_DATABASE_URL must be PostgreSQL URLs.");
   }
