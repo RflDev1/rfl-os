@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { createAnnouncement, createEvent, createFight, createFighter, deactivateAnnouncement, updateEventVisibility } from "@/features/home/admin.actions";
+import { createAnnouncement, createEvent, createFight, createFighter, deactivateAnnouncement, removeFighter, updateEventVisibility } from "@/features/home/admin.actions";
 import { SearchableSelect } from "@/components/searchable-select";
 
 export const metadata: Metadata = { title: "Home content" };
@@ -10,9 +10,14 @@ export default async function AdminHomePage({
 }: {
   searchParams: Promise<{ notice?: string; error?: string }>;
 }) {
-  const [{ notice, error }, fighters, events, announcements, eligibleUsers] = await Promise.all([
+  const [{ notice, error }, fighters, removableFighters, events, announcements, eligibleUsers] = await Promise.all([
     searchParams,
     prisma.fighter.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+    prisma.fighter.findMany({
+      where: { userId: { not: null } },
+      include: { user: { select: { displayName: true, name: true } } },
+      orderBy: [{ rank: "asc" }, { name: "asc" }],
+    }),
     prisma.event.findMany({ orderBy: { startsAt: "desc" }, take: 20 }),
     prisma.announcement.findMany({ where: { active: true }, orderBy: { createdAt: "desc" }, take: 5 }),
     prisma.user.findMany({
@@ -36,18 +41,33 @@ export default async function AdminHomePage({
             <SearchableSelect name="userId" label="Registered player" options={eligibleUsers.map((user) => ({ value: user.id, label: user.displayName ?? user.name ?? "Unnamed player", details: "Active Discord account" }))} searchPlaceholder="Search player name…" placeholder="Choose an eligible player" help="Players already linked to a fighter are automatically excluded." />
             <label>Fighter name<input name="name" required maxLength={60} /></label>
             <label>Nickname<input name="nickname" maxLength={40} /></label>
-            <p className="admin-guidance">Rank is assigned automatically after the current lowest-ranked fighter.</p>
-            <div className="form-row three">
-              <label>Wins<input name="wins" type="number" min="0" defaultValue="0" required /></label>
-              <label>Losses<input name="losses" type="number" min="0" defaultValue="0" required /></label>
-              <label>Draws<input name="draws" type="number" min="0" defaultValue="0" required /></label>
-            </div>
+            <p className="admin-guidance">Rank is assigned automatically after the current lowest-ranked fighter. Every new or returning fighter starts at 0-0-0.</p>
             <button className="button button-primary" type="submit">Add fighter</button>
           </form>
         </section>
 
         <section className="admin-panel">
-          <div className="panel-heading"><span>02</span><div><h2>Schedule an event</h2><p>Only scheduled or live events appear publicly.</p></div></div>
+          <div className="panel-heading"><span>02</span><div><h2>Remove a fighter</h2><p>Archive their fighter profile and remove their fighter access.</p></div></div>
+          <form action={removeFighter} className="admin-form">
+            <SearchableSelect
+              name="fighterId"
+              label="Current fighter"
+              options={removableFighters.map((fighter) => ({
+                value: fighter.id,
+                label: `${fighter.rank ? `#${fighter.rank} ` : ""}${fighter.name}`,
+                details: `${fighter.user?.displayName ?? fighter.user?.name ?? "Linked player"} · ${fighter.status}`,
+              }))}
+              searchPlaceholder="Search fighter, player, or rank…"
+              placeholder="Choose a fighter to remove"
+            />
+            <p className="admin-guidance">Completed fight history remains official. Pending requests are cancelled. Scheduled or live fighters cannot be removed.</p>
+            <label>Type REMOVE to confirm<input name="confirmation" required autoComplete="off" /></label>
+            <button className="button button-danger" type="submit">Remove fighter</button>
+          </form>
+        </section>
+
+        <section className="admin-panel">
+          <div className="panel-heading"><span>03</span><div><h2>Schedule an event</h2><p>Only scheduled or live events appear publicly.</p></div></div>
           <form action={createEvent} className="admin-form">
             <label>Event title<input name="title" required maxLength={80} /></label>
             <label>Short description<input name="subtitle" maxLength={140} /></label>
@@ -65,7 +85,7 @@ export default async function AdminHomePage({
         </section>
 
         <section className="admin-panel">
-          <div className="panel-heading"><span>03</span><div><h2>Add a fight</h2><p>Attach two existing fighters to an event.</p></div></div>
+          <div className="panel-heading"><span>04</span><div><h2>Add a fight</h2><p>Attach two existing fighters to an event.</p></div></div>
           <form action={createFight} className="admin-form">
             <SearchableSelect name="eventId" label="Event" options={events.map((event) => ({ value: event.id, label: event.title, details: event.startsAt.toLocaleString("en-US") }))} searchPlaceholder="Search event title…" />
             <div className="form-row">
@@ -78,7 +98,7 @@ export default async function AdminHomePage({
         </section>
 
         <section className="admin-panel">
-          <div className="panel-heading"><span>04</span><div><h2>Post an announcement</h2><p>Keep it short and useful.</p></div></div>
+          <div className="panel-heading"><span>05</span><div><h2>Post an announcement</h2><p>Keep it short and useful.</p></div></div>
           <form action={createAnnouncement} className="admin-form">
             <label>Message<input name="message" required maxLength={180} /></label>
             <div className="form-row">
@@ -92,7 +112,7 @@ export default async function AdminHomePage({
 
         {events.length > 0 && (
           <section className="admin-panel admin-panel-wide">
-            <div className="panel-heading"><span>05</span><div><h2>Publishing controls</h2><p>Move events between draft, scheduled, live, and completed.</p></div></div>
+            <div className="panel-heading"><span>06</span><div><h2>Publishing controls</h2><p>Move events between draft, scheduled, live, and completed.</p></div></div>
             <div className="event-control-list">
               {events.map((event) => (
                 <form action={updateEventVisibility} className="event-control" key={event.id}>

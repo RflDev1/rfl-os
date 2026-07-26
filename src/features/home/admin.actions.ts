@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSection } from "@/features/admin/authorization";
+import { syncUserFighterRole } from "@/features/discord/fighter-role";
 import { nextFighterRank } from "@/features/fighters/ranking.service";
-import { announcementSchema, contentIdSchema, eventSchema, eventVisibilitySchema, fightSchema, fighterSchema } from "./home.schema";
+import { announcementSchema, contentIdSchema, eventSchema, eventVisibilitySchema, fightSchema, fighterSchema, removeFighterSchema } from "./home.schema";
 import { getEnv } from "@/lib/env";
 import { syncFightStreamChannel } from "@/features/discord/stream-channel";
 
@@ -16,6 +17,18 @@ async function syncDiscordStream() {
     botToken: env.DISCORD_BOT_TOKEN,
     guildId: env.DISCORD_GUILD_ID,
   }).catch((error) => console.error("[rfl-discord] Fight Stream sync failed", error));
+}
+
+async function syncFighterRole(userId: string, active: boolean) {
+  const env = getEnv();
+  return syncUserFighterRole({
+    apiBaseUrl: env.DISCORD_API_BASE_URL,
+    botToken: env.DISCORD_BOT_TOKEN,
+    guildId: env.DISCORD_GUILD_ID,
+  }, userId, active).catch((error) => {
+    console.error("[rfl-discord] Fighter role sync failed", error);
+    return false;
+  });
 }
 
 function fail(message: string): never {
@@ -29,7 +42,7 @@ function done(message: string): never {
 }
 
 export async function createFighter(formData: FormData) {
-  await requireAdminSection("CONTENT");
+  const session = await requireAdminSection("CONTENT");
   const parsed = fighterSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) fail(parsed.error.issues[0]?.message ?? "Check the fighter details.");
   const eligibleUser = await prisma.user.findFirst({
@@ -39,10 +52,82 @@ export async function createFighter(formData: FormData) {
   if (!eligibleUser) fail("Choose an active Discord player who is not already assigned to a fighter.");
   const fighter = await prisma.$transaction(async (tx) => {
     const rank = await nextFighterRank(tx);
-    return tx.fighter.create({ data: { ...parsed.data, rank } });
+    const created = await tx.fighter.create({
+      data: { ...parsed.data, rank, wins: 0, losses: 0, draws: 0, status: "ACTIVE" },
+    });
+    await tx.adminAuditEntry.create({
+      data: {
+        actorId: session.user.id,
+        action: "FIGHTER_CREATED",
+        targetType: "Fighter",
+        targetId: created.id,
+        summary: { userId: parsed.data.userId, rank, record: "0-0-0" },
+      },
+    });
+    return created;
   }).catch(() => null);
   if (!fighter) fail("That player is already assigned or the fighter could not be created.");
-  done(`Fighter added at rank #${fighter.rank}.`);
+  const roleSynced = await syncFighterRole(parsed.data.userId, true);
+  done(`Fighter added at rank #${fighter.rank} with a 0-0-0 record.${roleSynced ? "" : " Fighter saved, but the Discord role could not be synced."}`);
+}
+
+export async function removeFighter(formData: FormData) {
+  const session = await requireAdminSection("CONTENT");
+  const parsed = removeFighterSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) fail("Choose a fighter and type REMOVE to confirm.");
+
+  const fighter = await prisma.fighter.findUnique({
+    where: { id: parsed.data.fighterId },
+    select: {
+      id: true,
+      userId: true,
+      name: true,
+      rank: true,
+      status: true,
+      redFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
+      blueFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
+    },
+  });
+  if (!fighter?.userId) fail("That fighter is already removed or is not linked to a player.");
+  if (fighter.redFights.length || fighter.blueFights.length) {
+    fail("Cancel or complete this fighter's scheduled/live fights before removing them.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.fightRequest.updateMany({
+      where: {
+        status: "PENDING",
+        OR: [{ requesterFighterId: fighter.id }, { opponentFighterId: fighter.id }],
+      },
+      data: { status: "CANCELLED" },
+    });
+    await tx.fighter.update({
+      where: { id: fighter.id },
+      data: { userId: null, rank: null, status: "INACTIVE" },
+    });
+    await tx.adminAuditEntry.create({
+      data: {
+        actorId: session.user.id,
+        action: "FIGHTER_REMOVED",
+        targetType: "Fighter",
+        targetId: fighter.id,
+        summary: {
+          userId: fighter.userId,
+          name: fighter.name,
+          previousRank: fighter.rank,
+          previousStatus: fighter.status,
+          historicalProfilePreserved: true,
+        },
+      },
+    });
+  });
+
+  const roleSynced = await syncFighterRole(fighter.userId, false);
+  revalidatePath("/fighters");
+  revalidatePath(`/fighters/${fighter.id}`);
+  revalidatePath("/admin/rankings");
+  revalidatePath("/admin/requests");
+  done(`${fighter.name} was removed. Their historical record remains archived.${roleSynced ? "" : " The Discord role could not be removed automatically."}`);
 }
 
 export async function createEvent(formData: FormData) {

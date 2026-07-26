@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminSection } from "@/features/admin/authorization";
+import { syncUserFighterRole } from "@/features/discord/fighter-role";
 import { nextFighterRank } from "@/features/fighters/ranking.service";
 import { auth } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
@@ -37,8 +38,8 @@ export async function assignFighterAction(formData: FormData) {
   const parsed = assignFighterSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminDone(parsed.error.issues[0]?.message ?? "Check the fighter assignment.", true);
   const fighter = await prisma.$transaction(async (tx) => {
-    const existing = await tx.fighter.findUnique({ where: { id: parsed.data.fighterId }, select: { rank: true, userId: true } });
-    if (!existing || existing.userId) throw new Error("Fighter unavailable");
+    const existing = await tx.fighter.findUnique({ where: { id: parsed.data.fighterId }, select: { rank: true, userId: true, status: true } });
+    if (!existing || existing.userId || existing.status === "INACTIVE") throw new Error("Fighter unavailable");
     const rank = existing.rank ?? await nextFighterRank(tx);
     const updated = await tx.fighter.update({ where: { id: parsed.data.fighterId }, data: { userId: parsed.data.userId, rank } });
     await tx.adminAuditEntry.create({ data: { actorId: session.user.id, action: "FIGHTER_ACCOUNT_ASSIGNED", targetType: "Fighter", targetId: updated.id, summary: { userId: parsed.data.userId, rank, rankAssignedAutomatically: existing.rank === null } } });
@@ -52,16 +53,115 @@ export async function updateFighterStatusAction(formData: FormData) {
   const session = await requireAdminSection("RANKINGS");
   const parsed = fighterStatusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/admin/rankings?error=Invalid+fighter+status");
-  const existing = await prisma.fighter.findUnique({ where: { id: parsed.data.fighterId } });
+  const existing = await prisma.fighter.findUnique({
+    where: { id: parsed.data.fighterId },
+    include: {
+      redFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
+      blueFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
+    },
+  });
   if (!existing) redirect("/admin/rankings?error=Fighter+not+found");
-  await prisma.$transaction([
-    prisma.fighter.update({ where: { id: existing.id }, data: { status: parsed.data.status } }),
-    prisma.adminAuditEntry.create({ data: { actorId: session.user.id, action: "FIGHTER_STATUS_CHANGED", targetType: "Fighter", targetId: existing.id, summary: { before: existing.status, after: parsed.data.status } } }),
-  ]);
+  if (!existing.userId && parsed.data.status === "ACTIVE") {
+    redirect("/admin/rankings?error=Archived+fighters+must+be+re-added+from+Home+content");
+  }
+  if (
+    parsed.data.status === "INACTIVE" &&
+    (existing.redFights.length > 0 || existing.blueFights.length > 0)
+  ) {
+    redirect("/admin/rankings?error=Cancel+or+complete+scheduled%2Flive+fights+before+making+this+fighter+inactive");
+  }
+
+  let activeFighterId = existing.id;
+  let assignedRank = existing.rank;
+  if (existing.status === "INACTIVE" && parsed.data.status === "ACTIVE" && existing.userId) {
+    const replacement = await prisma.$transaction(async (tx) => {
+      await tx.fighter.update({
+        where: { id: existing.id },
+        data: { userId: null, rank: null, status: "INACTIVE" },
+      });
+      const rank = await nextFighterRank(tx);
+      const created = await tx.fighter.create({
+        data: {
+          userId: existing.userId,
+          rank,
+          name: existing.name,
+          nickname: existing.nickname,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          status: "ACTIVE",
+        },
+      });
+      await tx.adminAuditEntry.create({
+        data: {
+          actorId: session.user.id,
+          action: "FIGHTER_REACTIVATED",
+          targetType: "Fighter",
+          targetId: created.id,
+          summary: {
+            archivedFighterId: existing.id,
+            userId: existing.userId,
+            rank,
+            record: "0-0-0",
+          },
+        },
+      });
+      return created;
+    });
+    activeFighterId = replacement.id;
+    assignedRank = replacement.rank;
+  } else {
+    await prisma.$transaction(async (tx) => {
+      if (parsed.data.status !== "ACTIVE") {
+        await tx.fightRequest.updateMany({
+          where: {
+            status: "PENDING",
+            OR: [{ requesterFighterId: existing.id }, { opponentFighterId: existing.id }],
+          },
+          data: { status: "CANCELLED" },
+        });
+      }
+      const rank = parsed.data.status === "INACTIVE"
+        ? null
+        : existing.rank ?? await nextFighterRank(tx);
+      await tx.fighter.update({
+        where: { id: existing.id },
+        data: { status: parsed.data.status, rank },
+      });
+      await tx.adminAuditEntry.create({
+        data: {
+          actorId: session.user.id,
+          action: "FIGHTER_STATUS_CHANGED",
+          targetType: "Fighter",
+          targetId: existing.id,
+          summary: { before: existing.status, after: parsed.data.status, rank },
+        },
+      });
+      assignedRank = rank;
+    });
+  }
+
+  let roleSynced = true;
+  if (existing.userId) {
+    const env = getEnv();
+    roleSynced = await syncUserFighterRole({
+      apiBaseUrl: env.DISCORD_API_BASE_URL,
+      botToken: env.DISCORD_BOT_TOKEN,
+      guildId: env.DISCORD_GUILD_ID,
+    }, existing.userId, parsed.data.status === "ACTIVE").catch((error) => {
+      console.error("[rfl-discord] Fighter role sync failed", error);
+      return false;
+    });
+  }
   revalidatePath("/fighters");
   revalidatePath(`/fighters/${existing.id}`);
+  if (activeFighterId !== existing.id) revalidatePath(`/fighters/${activeFighterId}`);
   revalidatePath("/admin/rankings");
-  redirect("/admin/rankings?notice=Fighter+status+updated");
+  revalidatePath("/admin/home");
+  const message = existing.status === "INACTIVE" && parsed.data.status === "ACTIVE"
+    ? `Fighter reactivated at rank #${assignedRank} with a fresh 0-0-0 record.${roleSynced ? "" : " Discord role sync failed; check the bot role hierarchy."}`
+    : `Fighter status updated.${roleSynced ? "" : " Discord role sync failed; check the bot role hierarchy."}`;
+  redirect(`/admin/rankings?notice=${encodeURIComponent(message)}`);
 }
 
 export async function reviewFightRequestAction(formData: FormData) {

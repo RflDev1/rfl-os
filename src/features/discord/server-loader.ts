@@ -1,4 +1,5 @@
 import { discordApi } from "./discord-api";
+import { ensureFighterDiscordRole } from "./fighter-role";
 
 const CHANNEL = { TEXT: 0, VOICE: 2, CATEGORY: 4 } as const;
 const PERMISSION = {
@@ -183,6 +184,7 @@ export async function loadRflDiscordServer(config: ApiConfig & { guildId: string
     discordApi<DiscordChannel[]>(`/guilds/${config.guildId}/channels`, config),
   ]);
   const channels = [...initialChannels];
+  await ensureFighterDiscordRole(config);
 
   for (const section of layout) {
     const category = await ensureCategory(config, guild.id, channels, section.category);

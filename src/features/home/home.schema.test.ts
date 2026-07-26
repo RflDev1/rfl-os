@@ -22,8 +22,15 @@ describe("home content validation", () => {
     expect(fightSchema.safeParse({ eventId: "event", redFighterId: "same", blueFighterId: "same", position: 1 }).success).toBe(false);
   });
 
-  it("keeps fighter records nonnegative", () => {
-    expect(fighterSchema.safeParse({ name: "A Fighter", wins: -1, losses: 0, draws: 0 }).success).toBe(false);
+  it("creates fighters without accepting an imported record", () => {
+    const result = fighterSchema.safeParse({
+      userId: "cm12345678901234567890123",
+      name: "A Fighter",
+      nickname: "",
+      wins: 99,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty("wins");
   });
 
   it("allows only internal announcement links", () => {
@@ -31,4 +38,3 @@ describe("home content validation", () => {
     expect(announcementSchema.safeParse({ message: "Watch now", linkLabel: "Open", linkUrl: "/play" }).success).toBe(true);
   });
 });
-

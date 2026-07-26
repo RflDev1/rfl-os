@@ -8,9 +8,11 @@ export const fighterSchema = z.object({
   userId: z.string().cuid(),
   name,
   nickname: optionalText(40),
-  wins: z.coerce.number().int().min(0).max(999),
-  losses: z.coerce.number().int().min(0).max(999),
-  draws: z.coerce.number().int().min(0).max(999),
+});
+
+export const removeFighterSchema = z.object({
+  fighterId: z.string().cuid(),
+  confirmation: z.literal("REMOVE"),
 });
 
 export const eventSchema = z.object({

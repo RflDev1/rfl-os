@@ -1,6 +1,7 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import NextAuth from "next-auth";
 import Discord from "next-auth/providers/discord";
+import { setDiscordFighterRole } from "@/features/discord/fighter-role";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 
@@ -84,7 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       const storedUser = await prisma.user.findUnique({
         where: { id: user.id },
-        select: { status: true },
+        select: { status: true, fighterProfile: { select: { status: true } } },
       });
       if (storedUser?.status === "SUSPENDED" || storedUser?.status === "DEACTIVATED") {
         console.error("[rfl-auth] Account status denied sign-in", { status: storedUser.status });
@@ -104,6 +105,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (storedUser && account?.provider === "discord") {
         await syncFighterAnalystRole(user.id, account.providerAccountId);
+        await setDiscordFighterRole({
+          apiBaseUrl: env.DISCORD_API_BASE_URL,
+          botToken: env.DISCORD_BOT_TOKEN,
+          guildId: env.DISCORD_GUILD_ID,
+        }, account.providerAccountId, storedUser.fighterProfile?.status === "ACTIVE").catch((error) => {
+          console.error("[rfl-auth] Fighter role sync failed", {
+            message: error instanceof Error ? error.message : "Unknown Discord error",
+          });
+        });
       }
 
       return true;
