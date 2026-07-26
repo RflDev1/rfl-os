@@ -39,12 +39,6 @@ const schema = z.object({
   DISCORD_GUILD_ID: z.string().regex(/^\d+$/),
   FIGHTER_ANALYST_DISCORD_ROLE_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d+$/).optional()),
   REMINDER_JOB_SECRET: z.preprocess((value) => value === "" ? undefined : value, z.string().min(32).optional()),
-  CARD_IMAGE_STORAGE_ENDPOINT: z.string().url().optional(),
-  CARD_IMAGE_STORAGE_REGION: z.string().min(1).optional(),
-  CARD_IMAGE_STORAGE_BUCKET: z.string().min(1).optional(),
-  CARD_IMAGE_STORAGE_ACCESS_KEY: z.string().min(1).optional(),
-  CARD_IMAGE_STORAGE_SECRET_KEY: z.string().min(1).optional(),
-  CARD_IMAGE_PUBLIC_BASE_URL: z.string().url().optional(),
 });
 
 export type AppEnv = z.infer<typeof schema>;
@@ -75,10 +69,6 @@ export function getEnv(): AppEnv {
   }
   if (cached.MARKET_MAX_PRICE < cached.MARKET_MIN_PRICE) {
     throw new Error("Invalid environment configuration: MARKET_MAX_PRICE");
-  }
-  const storage = [cached.CARD_IMAGE_STORAGE_ENDPOINT, cached.CARD_IMAGE_STORAGE_REGION, cached.CARD_IMAGE_STORAGE_BUCKET, cached.CARD_IMAGE_STORAGE_ACCESS_KEY, cached.CARD_IMAGE_STORAGE_SECRET_KEY, cached.CARD_IMAGE_PUBLIC_BASE_URL];
-  if (storage.some(Boolean) && !storage.every(Boolean)) {
-    throw new Error("Invalid environment configuration: complete all CARD_IMAGE_STORAGE_* values");
   }
   return cached;
 }

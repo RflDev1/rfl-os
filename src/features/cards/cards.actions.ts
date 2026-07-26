@@ -8,7 +8,7 @@ import { getEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { cardSchema, openPackSchema, packSchema, setSchema } from "./cards.schema";
 import { openPack, PackFundsError, PackRateLimitError, PackUnavailableError } from "./cards.service";
-import { CardImageUploadError, uploadCardImage } from "./card-image-storage";
+import { CardImageUploadError, prepareCardImage } from "./card-image-storage";
 
 export type PackActionState = { openingId?: string; packName?: string; balance?: number; cards?: Array<{ id: string; name: string; subtitle: string | null; rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY"; serialNumber: number; setCode: string; cardNumber: number; imageUrl: string | null }>; error?: string };
 
@@ -50,12 +50,26 @@ export async function createCardAction(formData: FormData) {
   const parsed = cardSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) adminDone(parsed.error.issues[0]?.message ?? "Check the card.", true);
   const image = formData.get("image");
-  let imageUrl = parsed.data.imageUrl;
+  let storedImage: Awaited<ReturnType<typeof prepareCardImage>> | undefined;
   if (image instanceof File && image.size > 0) {
-    try { imageUrl = await uploadCardImage(image); }
+    try { storedImage = await prepareCardImage(image); }
     catch (error) { adminDone(error instanceof CardImageUploadError ? error.message : "The card image upload failed.", true); }
   }
-  const card = await prisma.cardDefinition.create({ data: { ...parsed.data, imageUrl } }).catch(() => null);
+  const card = await prisma.$transaction(async (tx) => {
+    const created = await tx.cardDefinition.create({
+      data: { ...parsed.data, imageUrl: storedImage ? null : parsed.data.imageUrl },
+    });
+    if (storedImage) {
+      await tx.cardImage.create({
+        data: { cardDefinitionId: created.id, ...storedImage },
+      });
+      return tx.cardDefinition.update({
+        where: { id: created.id },
+        data: { imageUrl: `/api/card-images/${created.id}` },
+      });
+    }
+    return created;
+  }).catch(() => null);
   if (!card) adminDone("That card number or data is already in use.", true);
   await prisma.adminAuditEntry.create({ data: { actorId: session.user.id, action: "CARD_DEFINITION_CREATED", targetType: "CardDefinition", targetId: card.id, summary: { rarity: card.rarity, cardNumber: card.cardNumber } } });
   adminDone("Card definition created.");

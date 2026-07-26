@@ -75,6 +75,7 @@ try {
     "20260722010000_fighter_status",
     "20260724010000_fighter_analyst_role",
     "20260724230000_discord_fight_reminders",
+    "20260726010000_database_card_images",
   ]);
 
   const player = await prisma.user.create({
@@ -387,6 +388,15 @@ try {
 
   const cardSet = await prisma.cardSet.create({ data: { name: "Integration Origins", code: "IT01", description: "Fictional integration set", releasedAt: new Date(Date.now() - 1_000), active: true } });
   const commonCard = await prisma.cardDefinition.create({ data: { setId: cardSet.id, fighterId: red.id, name: "Red Realm Rookie", subtitle: "First Strike", rarity: "COMMON", cardNumber: 1 } });
+  await prisma.cardImage.create({
+    data: {
+      cardDefinitionId: commonCard.id,
+      data: Buffer.from("integration-card-image"),
+      contentType: "image/webp",
+      byteSize: 22,
+      checksum: "integration-checksum",
+    },
+  });
   await prisma.cardDefinition.create({ data: { setId: cardSet.id, fighterId: blue.id, name: "Blue Realm Elite", rarity: "RARE", cardNumber: 2 } });
   const pack = await prisma.packDefinition.create({ data: { setId: cardSet.id, name: "Integration Pack", price: 50, cardsPerPack: 3, commonWeight: 100, rareWeight: 0, epicWeight: 0, legendaryWeight: 0, active: true } });
   const packInput = { userId: player.id, packId: pack.id, idempotencyKey: "integration-pack-one", maxOpeningsPerMinute: 10 };
@@ -494,6 +504,7 @@ try {
   assert.equal(await prisma.cardInstance.count(), 0);
   assert.equal(await prisma.cardSet.count(), 1);
   assert.equal(await prisma.cardDefinition.count(), 2);
+  assert.equal(await prisma.cardImage.count(), 1);
   assert.equal(await prisma.cardDefinition.count({ where: { fighterId: { not: null } } }), 0);
   assert.equal(await prisma.packDefinition.count(), 1);
   assert.equal(await prisma.adminAuditEntry.count({ where: { action: "TESTING_DATA_RESET", actorId: player.id } }), 1);

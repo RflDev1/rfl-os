@@ -349,11 +349,24 @@ model CardDefinition {
   updatedAt   DateTime   @updatedAt @map("updated_at")
   set         CardSet    @relation(fields: [setId], references: [id], onDelete: Restrict)
   fighter     Fighter?   @relation(fields: [fighterId], references: [id], onDelete: Restrict)
+  image       CardImage?
   instances   CardInstance[]
 
   @@unique([setId, cardNumber])
   @@index([setId, rarity, active])
   @@map("card_definitions")
+}
+
+model CardImage {
+  cardDefinitionId String         @id @map("card_definition_id")
+  data             Bytes
+  contentType      String         @map("content_type")
+  byteSize         Int            @map("byte_size")
+  checksum         String
+  createdAt        DateTime       @default(now()) @map("created_at")
+  cardDefinition   CardDefinition @relation(fields: [cardDefinitionId], references: [id], onDelete: Cascade)
+
+  @@map("card_images")
 }
 
 model PackDefinition {
