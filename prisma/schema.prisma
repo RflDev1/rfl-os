@@ -175,6 +175,11 @@ model User {
   image              String?
   status             UserStatus   @default(ACTIVE)
   profileCompletedAt DateTime?    @map("profile_completed_at")
+  dateOfBirth        DateTime?    @db.Date @map("date_of_birth")
+  termsAcceptedAt    DateTime?    @map("terms_accepted_at")
+  termsVersion       String?      @map("terms_version")
+  privacyAcceptedAt  DateTime?    @map("privacy_accepted_at")
+  privacyVersion     String?      @map("privacy_version")
   createdAt          DateTime     @default(now()) @map("created_at")
   updatedAt          DateTime     @updatedAt @map("updated_at")
   accounts           Account[]
@@ -196,8 +201,21 @@ model User {
   fighterProfile     Fighter?
   fightRequests      FightRequest[] @relation("RequestSubmitter")
   notificationJobs   DiscordNotification[]
+  legalAcceptances   LegalAcceptance[]
 
   @@map("users")
+}
+
+model LegalAcceptance {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  termsVersion   String   @map("terms_version")
+  privacyVersion String   @map("privacy_version")
+  acceptedAt     DateTime @default(now()) @map("accepted_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, acceptedAt])
+  @@map("legal_acceptances")
 }
 
 model Event {

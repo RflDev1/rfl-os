@@ -16,6 +16,8 @@ export type HighLowState = {
 export async function highLowAction(previous: HighLowState, formData: FormData): Promise<HighLowState> {
   const session = await auth();
   if (!session?.user.id || session.user.status !== "ACTIVE" || !session.user.profileCompletedAt) return { ...previous, error: "Sign in and finish your profile before playing." };
+  if (!session.user.legalOnboardingComplete) return { ...previous, error: "Confirm your birthday and accept the current policies before playing." };
+  if (!session.user.wageringEligible) return { ...previous, error: "Casino games are available only to players age 18 or older." };
   const env = getEnv();
   const parsed = highLowActionSchema(env.HIGH_LOW_MIN_WAGER, env.HIGH_LOW_MAX_WAGER).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ...previous, error: parsed.error.issues[0]?.message ?? "Check your action." };

@@ -17,6 +17,8 @@ export default async function BlackjackPage() {
   if (!session) redirect("/signin");
   if (session.user.status !== "ACTIVE") redirect("/signin?error=AccessDenied");
   if (!session.user.profileCompletedAt) redirect("/welcome");
+  if (!session.user.legalOnboardingComplete) redirect("/welcome");
+  if (!session.user.wageringEligible) redirect("/play");
   const env = getEnv();
   const [wallet, activeRound, recentRounds] = await Promise.all([
     prisma.wallet.findUnique({ where: { userId: session.user.id } }),

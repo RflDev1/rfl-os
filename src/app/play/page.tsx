@@ -32,6 +32,7 @@ export default async function PlayerHomePage() {
   if (!session) redirect("/signin");
   if (session.user.status !== "ACTIVE") redirect("/signin?error=AccessDenied");
   if (!session.user.profileCompletedAt) redirect("/welcome");
+  if (!session.user.legalOnboardingComplete) redirect("/welcome");
   const summary = await getWalletSummary(session.user.id);
   const balance = summary.wallet?.balance ?? 0;
 
@@ -48,7 +49,7 @@ export default async function PlayerHomePage() {
           <p>Crowns are virtual rewards. They can never be purchased or redeemed for cash.</p>
         </div>
         <DailyReward amount={getEnv().DAILY_REWARD_AMOUNT} claimedToday={summary.claimedToday} />
-        <Link className="casino-invite" href="/casino/coin-flip"><span><small>Realm Casino</small><strong>Think luck is on your side?</strong></span><b>Play Coin Flip →</b></Link>
+        {session.user.wageringEligible && <Link className="casino-invite" href="/casino/coin-flip"><span><small>Realm Casino</small><strong>Think luck is on your side?</strong></span><b>Play Coin Flip →</b></Link>}
         {summary.wallet && summary.wallet.entries.length > 0 && (
           <section className="wallet-activity" aria-labelledby="activity-title">
             <div><p className="eyebrow"><span /> Wallet</p><h2 id="activity-title">Recent Crown activity</h2></div>

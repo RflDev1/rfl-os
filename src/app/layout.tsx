@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
   title: { default: "Realm Fighting League", template: "%s · RFL" },
@@ -12,7 +13,7 @@ export const viewport: Viewport = { colorScheme: "dark", themeColor: "#080a0f" }
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>{children}<SiteFooter /></body>
     </html>
   );
 }

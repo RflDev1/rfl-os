@@ -24,9 +24,29 @@ export function ProfileForm({ suggestedName }: { suggestedName: string }) {
       />
       <p className="field-help" id="name-help">This is how other RFL players will know you.</p>
 
+      <label className="field-label" htmlFor="dateOfBirth">Date of birth</label>
+      <input
+        className="text-field"
+        defaultValue={state.fields?.dateOfBirth ?? ""}
+        id="dateOfBirth"
+        name="dateOfBirth"
+        type="date"
+        autoComplete="bday"
+        required
+      />
+      <p className="field-help">You must be at least 13 to use RFL. Betting and casino games remain locked until age 18.</p>
+
       <label className="check-row">
         <input name="acceptedRules" type="checkbox" required />
         <span>I understand Crowns are virtual rewards with no cash value.</span>
+      </label>
+      <label className="check-row">
+        <input name="acceptedTerms" type="checkbox" required />
+        <span>I agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms and Conditions</a>.</span>
+      </label>
+      <label className="check-row">
+        <input name="acceptedPrivacy" type="checkbox" required />
+        <span>I acknowledge the <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> and confirm my birthday is accurate.</span>
       </label>
 
       <p className="form-error" id="profile-error" role="alert">{state.error}</p>

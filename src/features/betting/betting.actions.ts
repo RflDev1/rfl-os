@@ -14,6 +14,8 @@ export type BetActionState = { success?: string; balance?: number; error?: strin
 export async function placeBetAction(_: BetActionState, formData: FormData): Promise<BetActionState> {
   const session = await auth();
   if (!session?.user.id || session.user.status !== "ACTIVE" || !session.user.profileCompletedAt) return { error: "Sign in and finish your profile before betting." };
+  if (!session.user.legalOnboardingComplete) return { error: "Confirm your birthday and accept the current policies before betting." };
+  if (!session.user.wageringEligible) return { error: "Fight betting is available only to players age 18 or older." };
   const env = getEnv();
   const parsed = placeBetSchema(env.BET_MIN_WAGER, env.BET_MAX_WAGER).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check your bet." };

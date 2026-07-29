@@ -10,7 +10,7 @@ export default async function WelcomePage() {
   const session = await auth();
   if (!session) redirect("/signin");
   if (session.user.status !== "ACTIVE") redirect("/signin?error=AccessDenied");
-  if (session.user.profileCompletedAt) redirect("/play");
+  if (session.user.profileCompletedAt && session.user.legalOnboardingComplete) redirect("/play");
 
   return (
     <main className="auth-page">
@@ -18,11 +18,10 @@ export default async function WelcomePage() {
       <div className="auth-brand"><BrandMark /></div>
       <section className="auth-card profile-card" aria-labelledby="welcome-title">
         <p className="step-label">Final step</p>
-        <h1 id="welcome-title">Choose your player name.</h1>
-        <p>Make it yours. You can change it later.</p>
-        <ProfileForm suggestedName={session.user.name ?? "Player"} />
+        <h1 id="welcome-title">{session.user.profileCompletedAt ? "Confirm your eligibility." : "Choose your player name."}</h1>
+        <p>Add your birthday and accept the current policies to continue.</p>
+        <ProfileForm suggestedName={session.user.displayName ?? session.user.name ?? "Player"} />
       </section>
     </main>
   );
 }
-

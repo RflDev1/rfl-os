@@ -25,6 +25,8 @@ export async function playCoinFlipAction(
   if (!session?.user.id || session.user.status !== "ACTIVE" || !session.user.profileCompletedAt) {
     return { error: "Sign in and finish your profile before playing." };
   }
+  if (!session.user.legalOnboardingComplete) return { error: "Confirm your birthday and accept the current policies before playing." };
+  if (!session.user.wageringEligible) return { error: "Casino games are available only to players age 18 or older." };
   const env = getEnv();
   const parsed = coinFlipSchema(env.COIN_FLIP_MIN_WAGER, env.COIN_FLIP_MAX_WAGER).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check your wager." };
@@ -53,4 +55,3 @@ export async function playCoinFlipAction(
     return { error: "The flip couldn’t be settled. No Crowns were changed. Try again." };
   }
 }
-

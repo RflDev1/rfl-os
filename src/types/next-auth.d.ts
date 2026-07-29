@@ -8,9 +8,10 @@ declare module "next-auth" {
       displayName: string | null;
       status: UserStatus;
       profileCompletedAt: Date | null;
+      legalOnboardingComplete: boolean;
+      wageringEligible: boolean;
       roles: Role[];
       walletBalance: number;
     } & DefaultSession["user"];
   }
 }
-

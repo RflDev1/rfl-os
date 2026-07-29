@@ -30,6 +30,8 @@ export async function blackjackAction(
   if (!session?.user.id || session.user.status !== "ACTIVE" || !session.user.profileCompletedAt) {
     return { ...previousState, error: "Sign in and finish your profile before playing." };
   }
+  if (!session.user.legalOnboardingComplete) return { ...previousState, error: "Confirm your birthday and accept the current policies before playing." };
+  if (!session.user.wageringEligible) return { ...previousState, error: "Casino games are available only to players age 18 or older." };
   const env = getEnv();
   const parsed = blackjackActionSchema(env.BLACKJACK_MIN_WAGER, env.BLACKJACK_MAX_WAGER).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ...previousState, error: parsed.error.issues[0]?.message ?? "Check your action." };
@@ -61,4 +63,3 @@ export async function blackjackAction(
     return { ...previousState, error: "The hand couldn’t continue. No unresolved Crown change was made." };
   }
 }
-

@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
+import { auth } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
+import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
   title: "Become a Fighter",
@@ -11,7 +14,16 @@ function DiscordMark() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19.5 5.3A17 17 0 0 0 15.4 4l-.5 1.1a15.7 15.7 0 0 0-5.8 0L8.6 4a17 17 0 0 0-4.1 1.3C1.9 9.2 1.2 13 1.6 16.7a16.5 16.5 0 0 0 5 2.5l1.2-1.7-1.7-.8.4-.3c3.5 1.6 7.4 1.6 10.9 0l.5.3-1.8.8 1.2 1.7a16.5 16.5 0 0 0 5-2.5c.5-4.3-.8-8-2.8-11.4ZM8.4 14.5c-1.1 0-2-1-2-2.3s.9-2.3 2-2.3 2 1 2 2.3-.9 2.3-2 2.3Zm7.2 0c-1.1 0-2-1-2-2.3s.9-2.3 2-2.3 2 1 2 2.3-.9 2.3-2 2.3Z" /></svg>;
 }
 
-export default function BecomeAFighterPage() {
+export default async function BecomeAFighterPage() {
+  const session = await auth();
+  if (session?.user.id) {
+    const fighter = await prisma.fighter.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
+    if (fighter) redirect(`/fighters/${fighter.id}`);
+  }
+
   const discordUrl = getEnv().BECOME_FIGHTER_DISCORD_URL;
   return <main className="fighter-application-page">
     <SiteHeader />

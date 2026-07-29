@@ -3,6 +3,7 @@ import NextAuth from "next-auth";
 import Discord from "next-auth/providers/discord";
 import { setDiscordFighterRole } from "@/features/discord/fighter-role";
 import { prisma } from "@/lib/prisma";
+import { canUseWagering, hasCurrentLegalConsent } from "@/lib/legal";
 import { getEnv } from "@/lib/env";
 
 const env = getEnv();
@@ -129,6 +130,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.displayName = account.displayName;
       session.user.status = account.status;
       session.user.profileCompletedAt = account.profileCompletedAt;
+      session.user.legalOnboardingComplete = hasCurrentLegalConsent(account);
+      session.user.wageringEligible = canUseWagering(account);
       session.user.roles = account.roles.map(({ role }) => role);
       session.user.walletBalance = account.wallet?.balance ?? 0;
       return session;
