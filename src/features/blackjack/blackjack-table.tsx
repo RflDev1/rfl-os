@@ -8,15 +8,15 @@ import { CrownGainBurst } from "@/components/crown-gain-burst";
 const suitSymbols = { S: "♠", H: "♥", D: "♦", C: "♣" } as const;
 
 function PlayingCard({ card, index, hidden, skipMotion }: { card: string | null; index: number; hidden?: boolean; skipMotion: boolean }) {
-  if (hidden || !card) return <div className="playing-card card-back" aria-label="Hidden dealer card"><span>RFL</span></div>;
+  if (hidden || !card) return <div className="playing-card card-back" aria-label="Hidden dealer card" role="img"><span aria-hidden="true">RFL</span></div>;
   const suit = card.slice(-1) as keyof typeof suitSymbols;
   const rank = card.slice(0, -1);
   const red = suit === "H" || suit === "D";
   return (
-    <div className={`playing-card ${red ? "red-suit" : ""} ${skipMotion ? "skip-deal" : ""}`} style={{ animationDelay: `${index * 90}ms` }} aria-label={`${rank} of ${suit === "S" ? "spades" : suit === "H" ? "hearts" : suit === "D" ? "diamonds" : "clubs"}`}>
-      <span className="card-corner">{rank}<small>{suitSymbols[suit]}</small></span>
-      <b>{suitSymbols[suit]}</b>
-      <span className="card-corner card-corner-bottom">{rank}<small>{suitSymbols[suit]}</small></span>
+    <div className={`playing-card ${red ? "red-suit" : ""} ${skipMotion ? "skip-deal" : ""}`} style={{ animationDelay: `${index * 90}ms` }} aria-label={`${rank} of ${suit === "S" ? "spades" : suit === "H" ? "hearts" : suit === "D" ? "diamonds" : "clubs"}`} role="img">
+      <span aria-hidden="true" className="card-corner">{rank}<small>{suitSymbols[suit]}</small></span>
+      <b aria-hidden="true">{suitSymbols[suit]}</b>
+      <span aria-hidden="true" className="card-corner card-corner-bottom">{rank}<small>{suitSymbols[suit]}</small></span>
     </div>
   );
 }

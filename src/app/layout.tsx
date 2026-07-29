@@ -13,7 +13,11 @@ export const viewport: Viewport = { colorScheme: "dark", themeColor: "#080a0f" }
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}<SiteFooter /></body>
+      <body>
+        <a className="skip-link" href="#main-content">Skip to main content</a>
+        <div id="main-content" tabIndex={-1}>{children}</div>
+        <SiteFooter />
+      </body>
     </html>
   );
 }

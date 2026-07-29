@@ -21,11 +21,38 @@ img, video { max-width: 100%; }
 .page-transition { animation: page-enter 220ms ease-out both; min-height: 100vh; }
 @keyframes page-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 a { color: inherit; text-decoration: none; }
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, input:focus-visible {
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:not([tabindex="-1"]):focus-visible {
   outline: 3px solid var(--violet-bright);
   outline-offset: 3px;
+}
+.skip-link {
+  background: var(--text);
+  border-radius: 6px;
+  color: var(--canvas);
+  font-size: 14px;
+  font-weight: 800;
+  left: 12px;
+  padding: 11px 16px;
+  position: fixed;
+  top: 12px;
+  transform: translateY(-180%);
+  transition: transform 120ms ease;
+  z-index: 10000;
+}
+.skip-link:focus { transform: translateY(0); }
+.sr-only {
+  border: 0 !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  position: absolute !important;
+  white-space: nowrap !important;
+  width: 1px !important;
 }
 
 .site-header {
@@ -856,6 +883,28 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+@media (pointer: coarse) {
+  .menu-toggle, .text-button, .mobile-menu-panel a, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, summary {
+    min-height: 44px;
+  }
+  input[type="checkbox"], input[type="radio"] {
+    min-height: 24px;
+    min-width: 24px;
+  }
+}
+
+@media (forced-colors: active) {
+  button, .button, input, select, textarea, summary, .mobile-menu-panel, .collectible-card {
+    border: 1px solid ButtonText;
+  }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+    outline-color: Highlight;
+  }
+  .nav-link-active::after, .mobile-menu-panel a.mobile-menu-active::before {
+    background: Highlight;
+  }
 }
 
 .site-footer { align-items: center; background: #06080d; border-top: 1px solid var(--line); color: var(--muted); display: flex; flex-wrap: wrap; font-size: 12px; gap: 16px 28px; justify-content: center; padding: 26px 24px; position: relative; z-index: 5; }

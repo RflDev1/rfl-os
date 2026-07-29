@@ -20,9 +20,10 @@ export function PackReveal({ packId, price, balance, openingKey }: { packId: str
   );
 
   if (pending) return (
-    <div className="pack-opening-stage" aria-live="polite" aria-label="Opening card pack">
-      <div className="pack-opening-burst" />
-      <div className="pack-opening-pack"><span>REALM</span><strong>RFL</strong><small>Breaking the seal…</small></div>
+    <div className="pack-opening-stage" aria-live="polite" aria-label="Opening card pack" role="status">
+      <div aria-hidden="true" className="pack-opening-burst" />
+      <div aria-hidden="true" className="pack-opening-pack"><span>REALM</span><strong>RFL</strong><small>Breaking the seal…</small></div>
+      <span className="sr-only">Opening your card pack. Please wait.</span>
     </div>
   );
 
