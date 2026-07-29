@@ -26,7 +26,7 @@ export async function SiteHeader() {
 
   return (
     <header className="site-header">
-      <Link className="brand" href="/" aria-label="Realm Fighting League home">
+      <Link className="brand" href="/" aria-label="RFL Realm Fighting League home">
         <BrandMark />
         <span className="brand-copy"><strong>RFL</strong><small>Realm Fighting League</small></span>
       </Link>

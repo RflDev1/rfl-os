@@ -50,10 +50,6 @@ export default async function HomePage() {
             </Link>
             <Link className="button button-ghost" href="/live">Watch live</Link>
           </div>
-          <div className="trust-row" aria-label="Platform promises">
-            <span><i>✓</i> Crowns never cost real money</span>
-            <span><i>✓</i> One secure Discord login</span>
-          </div>
         </div>
       </section>
 
