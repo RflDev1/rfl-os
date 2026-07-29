@@ -76,6 +76,7 @@ try {
     "20260724010000_fighter_analyst_role",
     "20260724230000_discord_fight_reminders",
     "20260726010000_database_card_images",
+    "20260729010000_card_supply_limits",
   ]);
 
   const player = await prisma.user.create({
@@ -419,6 +420,17 @@ try {
   assert.equal(afterPacks.entries.reduce((sum, entry) => sum + entry.delta, 0), 73);
   assert.equal(await prisma.cardInstance.count({ where: { ownerId: player.id } }), 6);
 
+  const uniqueCard = await prisma.cardDefinition.create({ data: { setId: cardSet.id, name: "Only One", rarity: "LEGENDARY", cardNumber: 3, maxSupply: 1 } });
+  const uniquePack = await prisma.packDefinition.create({ data: { setId: cardSet.id, name: "Unique Pack", price: 1, cardsPerPack: 1, commonWeight: 0, rareWeight: 0, epicWeight: 0, legendaryWeight: 1, active: true } });
+  const uniqueCollector = await prisma.user.create({ data: { displayName: "Unique Collector", profileCompletedAt: new Date(), roles: { create: { role: "PLAYER" } }, wallet: { create: { balance: 10, entries: { create: { delta: 10, balanceAfter: 10, reason: "ADMIN_ADJUSTMENT", idempotencyKey: "unique-collector-seed" } } } } } });
+  const uniqueOpening = await cardsService.openPack({ userId: uniqueCollector.id, packId: uniquePack.id, idempotencyKey: "unique-pack-one", maxOpeningsPerMinute: 10 }, () => 0);
+  assert.equal(uniqueOpening.cards[0]?.definitionId, uniqueCard.id);
+  await assert.rejects(
+    cardsService.openPack({ userId: uniqueCollector.id, packId: uniquePack.id, idempotencyKey: "unique-pack-two", maxOpeningsPerMinute: 10 }, () => 0),
+    /Not enough cards remain/,
+  );
+  assert.equal(await prisma.cardInstance.count({ where: { definitionId: uniqueCard.id } }), 1);
+
   const databaseClient = prisma;
   const [buyerOne, buyerTwo] = await Promise.all(["Market Buyer One", "Market Buyer Two"].map((displayName, index) => databaseClient.user.create({ data: { displayName, profileCompletedAt: new Date(), roles: { create: { role: "PLAYER" } }, wallet: { create: { balance: 500, entries: { create: { delta: 500, balanceAfter: 500, reason: "ADMIN_ADJUSTMENT", idempotencyKey: `market-buyer-seed-${index}` } } } } } })));
   const sellerCards = await prisma.cardInstance.findMany({ where: { ownerId: player.id }, orderBy: { serialNumber: "asc" } });
@@ -503,10 +515,10 @@ try {
   assert.equal(await prisma.event.count(), 0);
   assert.equal(await prisma.cardInstance.count(), 0);
   assert.equal(await prisma.cardSet.count(), 1);
-  assert.equal(await prisma.cardDefinition.count(), 2);
+  assert.equal(await prisma.cardDefinition.count(), 3);
   assert.equal(await prisma.cardImage.count(), 1);
   assert.equal(await prisma.cardDefinition.count({ where: { fighterId: { not: null } } }), 0);
-  assert.equal(await prisma.packDefinition.count(), 1);
+  assert.equal(await prisma.packDefinition.count(), 2);
   assert.equal(await prisma.adminAuditEntry.count({ where: { action: "TESTING_DATA_RESET", actorId: player.id } }), 1);
 
   process.stdout.write("Database integration passed: migrations, concurrent casino, betting, pack, marketplace, fight requests, result records, upset rankings, Discord notification scheduling, protected testing reset, preserved card catalog, rewards, ledgers, ownership, duplicates, constraints, roles, home content, and live events.\n");

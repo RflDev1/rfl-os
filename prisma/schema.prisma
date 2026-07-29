@@ -343,6 +343,7 @@ model CardDefinition {
   subtitle    String?
   rarity      CardRarity
   cardNumber  Int        @map("card_number")
+  maxSupply   Int?       @map("max_supply")
   imageUrl    String?    @map("image_url")
   active      Boolean    @default(true)
   createdAt   DateTime   @default(now()) @map("created_at")
