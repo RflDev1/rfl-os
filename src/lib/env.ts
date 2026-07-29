@@ -37,6 +37,7 @@ const schema = z.object({
     z.string().min(1).optional(),
   ),
   DISCORD_GUILD_ID: z.string().regex(/^\d+$/),
+  BECOME_FIGHTER_DISCORD_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().startsWith("https://discord.com/channels/").optional()),
   FIGHTER_ANALYST_DISCORD_ROLE_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d+$/).optional()),
   REMINDER_JOB_SECRET: z.preprocess((value) => value === "" ? undefined : value, z.string().min(32).optional()),
 });

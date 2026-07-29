@@ -78,6 +78,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: "1514881431229431868"
+      - key: BECOME_FIGHTER_DISCORD_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: https://discord.com/channels/1514881431229431868/1530421080324308993
       - key: FIGHTER_ANALYST_DISCORD_ROLE_ID
         scope: RUN_TIME
         type: GENERAL

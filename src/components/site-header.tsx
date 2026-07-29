@@ -16,6 +16,7 @@ export async function SiteHeader() {
     { href: "/", label: "Home" },
     { href: "/live", label: "Live" },
     { href: "/fighters", label: "Fighters" },
+    { href: "/become-a-fighter", label: "Become a fighter" },
     { href: "/cards", label: "Cards" },
     { href: "/market", label: "Market" },
     ...(session?.user.profileCompletedAt ? [{ href: "/casino/coin-flip", label: "Casino", match: ["/casino"] }] : []),
