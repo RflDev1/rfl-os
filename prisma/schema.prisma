@@ -69,6 +69,23 @@ enum WalletReason {
   PACK_PURCHASE
   MARKET_PURCHASE
   MARKET_SALE
+  FIGHT_POOL_WIN
+  FIGHT_POOL_REVERSAL
+}
+
+enum FighterPoolMatchStatus {
+  AWAITING_CHECKIN
+  READY
+  LIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum FighterPoolReviewAction {
+  UPHOLD
+  REVERSE
+  VOID
 }
 
 enum MarketListingStatus {
@@ -245,6 +262,8 @@ model Fighter {
   losses    Int      @default(0)
   draws     Int      @default(0)
   status    FighterStatus @default(ACTIVE)
+  minecraftUsername           String? @map("minecraft_username")
+  minecraftUsernameNormalized String? @unique @map("minecraft_username_normalized")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   redFights  Fight[] @relation("RedFighter")
@@ -253,9 +272,110 @@ model Fighter {
   user       User? @relation(fields: [userId], references: [id], onDelete: Restrict)
   sentRequests FightRequest[] @relation("RequestingFighter")
   receivedRequests FightRequest[] @relation("OpponentFighter")
+  poolQueueEntry FighterPoolQueueEntry?
+  poolMatchesAsRed FighterPoolMatch[] @relation("PoolRedFighter")
+  poolMatchesAsBlue FighterPoolMatch[] @relation("PoolBlueFighter")
+  poolMatchesWon FighterPoolMatch[] @relation("PoolWinner")
+  poolMatchesLost FighterPoolMatch[] @relation("PoolLoser")
 
   @@index([status, name])
   @@map("fighters")
+}
+
+model FighterPoolQueueEntry {
+  id        String   @id @default(cuid())
+  fighterId String   @unique @map("fighter_id")
+  rank      Int
+  joinedAt DateTime @default(now()) @map("joined_at")
+  fighter  Fighter  @relation(fields: [fighterId], references: [id], onDelete: Cascade)
+
+  @@index([joinedAt])
+  @@map("fighter_pool_queue_entries")
+}
+
+model FighterPoolServer {
+  id             String   @id
+  kind           String   @default("ARENA")
+  publicAddress  String   @map("public_address")
+  port           Int
+  status         String   @default("AVAILABLE")
+  currentMatchId String?  @unique @map("current_match_id")
+  lastHeartbeatAt DateTime @default(now()) @map("last_heartbeat_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  currentMatch   FighterPoolMatch? @relation(fields: [currentMatchId], references: [id], onDelete: SetNull)
+  presences      FighterPoolPresence[]
+
+  @@index([status, lastHeartbeatAt])
+  @@map("fighter_pool_servers")
+}
+
+model FighterPoolPresence {
+  id                          String   @id @default(cuid())
+  serverId                    String   @map("server_id")
+  minecraftUsername           String   @map("minecraft_username")
+  minecraftUsernameNormalized String   @map("minecraft_username_normalized")
+  lastSeenAt                  DateTime @default(now()) @map("last_seen_at")
+  server                      FighterPoolServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, minecraftUsernameNormalized])
+  @@index([minecraftUsernameNormalized, lastSeenAt])
+  @@map("fighter_pool_presences")
+}
+
+model FighterPoolMatch {
+  id                   String   @id @default(cuid())
+  redFighterId         String   @map("red_fighter_id")
+  blueFighterId        String   @map("blue_fighter_id")
+  winnerFighterId      String?  @map("winner_fighter_id")
+  loserFighterId       String?  @map("loser_fighter_id")
+  redRankSnapshot      Int      @map("red_rank_snapshot")
+  blueRankSnapshot     Int      @map("blue_rank_snapshot")
+  redCodeHash          String   @map("red_code_hash")
+  redCodeEncrypted     String   @map("red_code_encrypted")
+  blueCodeHash         String   @map("blue_code_hash")
+  blueCodeEncrypted    String   @map("blue_code_encrypted")
+  redCheckedInAt       DateTime? @map("red_checked_in_at")
+  blueCheckedInAt      DateTime? @map("blue_checked_in_at")
+  redRoundWins         Int      @default(0) @map("red_round_wins")
+  blueRoundWins        Int      @default(0) @map("blue_round_wins")
+  status               FighterPoolMatchStatus @default(AWAITING_CHECKIN)
+  resultDisposition    String   @default("ORIGINAL") @map("result_disposition")
+  resultReportId       String?  @unique @map("result_report_id")
+  resultPayload        Json?    @map("result_payload")
+  rewardAmount         Int      @default(0) @map("reward_amount")
+  codeExpiresAt        DateTime @map("code_expires_at")
+  reconnectDeadlineAt  DateTime? @map("reconnect_deadline_at")
+  startedAt            DateTime? @map("started_at")
+  completedAt          DateTime? @map("completed_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  redFighter           Fighter @relation("PoolRedFighter", fields: [redFighterId], references: [id], onDelete: Restrict)
+  blueFighter          Fighter @relation("PoolBlueFighter", fields: [blueFighterId], references: [id], onDelete: Restrict)
+  winnerFighter        Fighter? @relation("PoolWinner", fields: [winnerFighterId], references: [id], onDelete: Restrict)
+  loserFighter         Fighter? @relation("PoolLoser", fields: [loserFighterId], references: [id], onDelete: Restrict)
+  assignedServer       FighterPoolServer?
+  reviews              FighterPoolResultReview[]
+
+  @@index([redFighterId, createdAt])
+  @@index([blueFighterId, createdAt])
+  @@index([status, createdAt])
+  @@map("fighter_pool_matches")
+}
+
+model FighterPoolResultReview {
+  id              String   @id @default(cuid())
+  matchId         String   @map("match_id")
+  actorId         String   @map("actor_id")
+  action          FighterPoolReviewAction
+  reason          String
+  previousWinnerId String? @map("previous_winner_id")
+  resultingWinnerId String? @map("resulting_winner_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  match           FighterPoolMatch @relation(fields: [matchId], references: [id], onDelete: Restrict)
+
+  @@index([matchId, createdAt])
+  @@map("fighter_pool_result_reviews")
 }
 
 model Fight {

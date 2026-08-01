@@ -27,6 +27,8 @@ describe("home content validation", () => {
       userId: "cm12345678901234567890123",
       name: "A Fighter",
       nickname: "",
+      minecraftUsername: "BedrockPlayer",
+      minecraftUsernameConfirmation: "bedrockplayer",
       wins: 99,
     });
     expect(result.success).toBe(true);

@@ -86,12 +86,15 @@ export async function removeFighter(formData: FormData) {
       status: true,
       redFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
       blueFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
+      poolMatchesAsRed: { where: { status: { in: ["AWAITING_CHECKIN", "READY", "LIVE"] } }, select: { id: true }, take: 1 },
+      poolMatchesAsBlue: { where: { status: { in: ["AWAITING_CHECKIN", "READY", "LIVE"] } }, select: { id: true }, take: 1 },
     },
   });
   if (!fighter?.userId) fail("That fighter is already removed or is not linked to a player.");
   if (fighter.redFights.length || fighter.blueFights.length) {
     fail("Cancel or complete this fighter's scheduled/live fights before removing them.");
   }
+  if (fighter.poolMatchesAsRed.length || fighter.poolMatchesAsBlue.length) fail("Resolve this fighter's active Fighter Pool match before removing them.");
 
   await prisma.$transaction(async (tx) => {
     await tx.fightRequest.updateMany({
@@ -101,6 +104,7 @@ export async function removeFighter(formData: FormData) {
       },
       data: { status: "CANCELLED" },
     });
+    await tx.fighterPoolQueueEntry.deleteMany({ where: { fighterId: fighter.id } });
     await tx.fighter.update({
       where: { id: fighter.id },
       data: { userId: null, rank: null, status: "INACTIVE" },

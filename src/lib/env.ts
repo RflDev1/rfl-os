@@ -40,6 +40,12 @@ const schema = z.object({
   BECOME_FIGHTER_DISCORD_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().startsWith("https://discord.com/channels/").optional()),
   FIGHTER_ANALYST_DISCORD_ROLE_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d+$/).optional()),
   REMINDER_JOB_SECRET: z.preprocess((value) => value === "" ? undefined : value, z.string().min(32).optional()),
+  FIGHT_POOL_ENABLED: z.preprocess((value) => value === undefined ? "false" : value, z.enum(["true", "false"]).transform((value) => value === "true")),
+  FIGHT_POOL_WIN_REWARD: z.coerce.number().int().min(0).max(100_000).default(100),
+  FIGHT_POOL_CODE_TTL_MINUTES: z.coerce.number().int().min(2).max(60).default(10),
+  FIGHT_POOL_PRESENCE_TTL_SECONDS: z.coerce.number().int().min(10).max(300).default(45),
+  FIGHT_POOL_BRIDGE_SECRET: z.preprocess((value) => value === "" ? undefined : value, z.string().min(32).optional()),
+  FIGHT_POOL_CODE_SECRET: z.preprocess((value) => value === "" ? undefined : value, z.string().min(32).optional()),
 });
 
 export type AppEnv = z.infer<typeof schema>;

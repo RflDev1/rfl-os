@@ -8,6 +8,15 @@ export const fighterSchema = z.object({
   userId: z.string().cuid(),
   name,
   nickname: optionalText(40),
+  minecraftUsername: z.string().trim().min(1, "Enter the Bedrock gamertag.").max(16, "Bedrock gamertags cannot exceed 16 characters."),
+  minecraftUsernameConfirmation: z.string().trim(),
+}).refine((value) => value.minecraftUsername.toLocaleLowerCase("en-US") === value.minecraftUsernameConfirmation.toLocaleLowerCase("en-US"), {
+  message: "Minecraft username inputs do not match.",
+  path: ["minecraftUsernameConfirmation"],
+}).transform((input) => {
+  const { minecraftUsernameConfirmation, ...value } = input;
+  void minecraftUsernameConfirmation;
+  return { ...value, minecraftUsernameNormalized: value.minecraftUsername.toLocaleLowerCase("en-US") };
 });
 
 export const removeFighterSchema = z.object({

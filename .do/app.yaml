@@ -177,6 +177,28 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: "5"
+      - key: FIGHT_POOL_ENABLED
+        scope: RUN_TIME
+        type: GENERAL
+        value: "false"
+      - key: FIGHT_POOL_WIN_REWARD
+        scope: RUN_TIME
+        type: GENERAL
+        value: "100"
+      - key: FIGHT_POOL_CODE_TTL_MINUTES
+        scope: RUN_TIME
+        type: GENERAL
+        value: "10"
+      - key: FIGHT_POOL_PRESENCE_TTL_SECONDS
+        scope: RUN_TIME
+        type: GENERAL
+        value: "45"
+      - key: FIGHT_POOL_BRIDGE_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: FIGHT_POOL_CODE_SECRET
+        scope: RUN_TIME
+        type: SECRET
       - key: BOOTSTRAP_ADMIN_DISCORD_ID
         scope: RUN_TIME
         type: GENERAL

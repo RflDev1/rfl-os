@@ -1,0 +1,42 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "RFL BedWars",
+    "description": "Map-agnostic competitive BedWars framework",
+    "uuid": "c07f80ef-6909-49de-8aef-963ffc973ef3",
+    "version": [1, 0, 14],
+    "min_engine_version": [1, 21, 100]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "1458e712-3a54-4de6-a363-631a2875232b",
+      "version": [1, 0, 14]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "entry": "scripts/main.js",
+      "uuid": "ba831068-d251-4c5b-bbc3-c85ec0192b07",
+      "version": [1, 0, 14]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "b1f3f823-0a45-4992-aa34-62d25455e93f",
+      "version": [1, 0, 14]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.1.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "2.0.0"
+    }
+  ],
+  "metadata": {
+    "authors": ["RFL"],
+    "license": "All rights reserved"
+  }
+}

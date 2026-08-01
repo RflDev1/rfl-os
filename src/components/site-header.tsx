@@ -11,7 +11,8 @@ import { SiteMobileMenu } from "./site-mobile-menu";
 export async function SiteHeader() {
   const session = await auth();
   const ready = Boolean(session?.user.profileCompletedAt);
-  const fighter = session?.user.id ? await prisma.fighter.findUnique({ where: { userId: session.user.id }, select: { id: true } }) : null;
+  const fighter = session?.user.id ? await prisma.fighter.findUnique({ where: { userId: session.user.id }, select: { id: true, status: true } }) : null;
+  const activeFighter = fighter?.status === "ACTIVE";
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/live", label: "Live" },
@@ -20,7 +21,7 @@ export async function SiteHeader() {
     { href: "/market", label: "Market" },
     ...(session?.user.wageringEligible ? [{ href: "/casino/coin-flip", label: "Casino", match: ["/casino"] }] : []),
     ...(!fighter ? [{ href: "/become-a-fighter", label: "Become a fighter" }] : []),
-    ...(fighter ? [{ href: "/fight-requests", label: "Fight requests" }] : []),
+    ...(activeFighter ? [{ href: "/fighter-pool", label: "Fighter Pool" }, { href: "/fight-requests", label: "Fight requests" }] : []),
     ...(session?.user.roles.some((role) => role === "ADMIN" || role === "FIGHTER_ANALYST") ? [{ href: "/admin/home", label: "Control center", match: ["/admin"] }] : []),
   ];
 

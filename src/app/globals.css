@@ -885,6 +885,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
 
+.pool-page { min-height: 75vh; padding: clamp(72px, 10vw, 140px) max(24px, calc((100vw - 1180px) / 2)); background: radial-gradient(circle at 50% 20%, rgba(118,84,228,.14), transparent 40%); }
+.pool-page > header { max-width: 780px; margin-bottom: 36px; }
+.pool-page h1 { font-family: var(--font-display); font-size: clamp(3.4rem, 8vw, 7rem); line-height: .9; text-transform: uppercase; }
+.pool-page > header > p:last-child { color: var(--muted); font-size: 1.05rem; max-width: 680px; }
+.pool-status-card, .pool-match-found { max-width: 760px; padding: clamp(28px, 5vw, 52px); border: 1px solid var(--border); border-radius: 24px; background: rgba(9,10,18,.92); box-shadow: 0 30px 90px rgba(0,0,0,.3); }
+.pool-status-card h2, .pool-match-found h2 { font-size: clamp(1.8rem, 4vw, 3.2rem); margin-bottom: 12px; }
+.pool-status-card p, .pool-match-found p { color: var(--muted); }
+.pool-presence-ready { color: #7ee6a0 !important; }.pool-presence-missing { color: #ffc1c1 !important; }
+.pool-opponent { font-size: 1.2rem; }.pool-opponent strong { color: var(--foreground); }
+.pool-code { margin: 28px 0; padding: 22px; border: 1px solid rgba(139,108,255,.55); border-radius: 16px; text-align: center; background: rgba(118,84,228,.1); }
+.pool-code span { display: block; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; }.pool-code strong { display: block; margin-top: 8px; font-size: clamp(2rem, 8vw, 4rem); letter-spacing: .12em; }
+.pool-match-found dl, .pool-match-review dl { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0,1fr)); }.pool-match-found dl div, .pool-match-review dl div { padding: 14px; border-radius: 12px; background: rgba(255,255,255,.035); }.pool-match-found dt, .pool-match-review dt { color: var(--muted); font-size: .75rem; text-transform: uppercase; }.pool-match-found dd, .pool-match-review dd { margin: 5px 0 0; overflow-wrap: anywhere; }
+.pool-admin-row { display: flex; justify-content: space-between; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--border); }.pool-admin-row div, .pool-admin-row span { display: grid; }.pool-admin-row small { color: var(--muted); }
+.pool-admin-matches details { border-top: 1px solid var(--border); }.pool-admin-matches summary { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 4px; cursor: pointer; }.pool-admin-matches summary span { display: grid; }.pool-admin-matches summary small { color: var(--muted); }.pool-match-review { padding: 0 4px 26px; }.pool-match-review dl { margin-bottom: 24px; }
+@media (max-width: 700px) { .pool-match-found dl, .pool-match-review dl { grid-template-columns: 1fr; }.pool-page { padding-top: 56px; }.pool-code strong { letter-spacing: .06em; } }
+
 @media (pointer: coarse) {
   .menu-toggle, .text-button, .mobile-menu-panel a, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, summary {
     min-height: 44px;

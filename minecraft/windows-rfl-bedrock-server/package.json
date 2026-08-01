@@ -1,0 +1,11 @@
+{
+  "name": "rfl-bedrock-windows-host",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/host.mjs",
+    "check": "node --check src/host.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

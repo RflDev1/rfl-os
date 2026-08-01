@@ -26,6 +26,12 @@ export async function resetTestingData(ownerUserId: string) {
     await tx.fight.deleteMany();
     await tx.event.deleteMany();
 
+    await tx.fighterPoolResultReview.deleteMany();
+    await tx.fighterPoolQueueEntry.deleteMany();
+    await tx.fighterPoolPresence.deleteMany();
+    await tx.fighterPoolMatch.deleteMany();
+    await tx.fighterPoolServer.deleteMany();
+
     await tx.cardDefinition.updateMany({ data: { fighterId: null } });
     await tx.fighter.deleteMany();
 

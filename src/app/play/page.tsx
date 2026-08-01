@@ -25,6 +25,8 @@ const activityLabels = {
   PACK_PURCHASE: "Card pack",
   MARKET_PURCHASE: "Marketplace purchase",
   MARKET_SALE: "Marketplace sale",
+  FIGHT_POOL_WIN: "Fighter Pool win",
+  FIGHT_POOL_REVERSAL: "Fighter Pool result correction",
 } as const;
 
 export default async function PlayerHomePage() {

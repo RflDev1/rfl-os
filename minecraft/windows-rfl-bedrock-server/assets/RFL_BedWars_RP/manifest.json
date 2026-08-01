@@ -1,0 +1,21 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "RFL BedWars Resources",
+    "description": "Text and audio definitions for RFL BedWars",
+    "uuid": "b1f3f823-0a45-4992-aa34-62d25455e93f",
+    "version": [1, 0, 14],
+    "min_engine_version": [1, 21, 100]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "4e373ba3-84d3-454c-9804-f6299a9d7500",
+      "version": [1, 0, 14]
+    }
+  ],
+  "metadata": {
+    "authors": ["RFL"],
+    "license": "All rights reserved"
+  }
+}

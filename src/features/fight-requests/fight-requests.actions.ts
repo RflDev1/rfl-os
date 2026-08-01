@@ -58,6 +58,8 @@ export async function updateFighterStatusAction(formData: FormData) {
     include: {
       redFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
       blueFights: { where: { status: { in: ["SCHEDULED", "LIVE"] } }, select: { id: true }, take: 1 },
+      poolMatchesAsRed: { where: { status: { in: ["AWAITING_CHECKIN", "READY", "LIVE"] } }, select: { id: true }, take: 1 },
+      poolMatchesAsBlue: { where: { status: { in: ["AWAITING_CHECKIN", "READY", "LIVE"] } }, select: { id: true }, take: 1 },
     },
   });
   if (!existing) redirect("/admin/rankings?error=Fighter+not+found");
@@ -70,6 +72,9 @@ export async function updateFighterStatusAction(formData: FormData) {
   ) {
     redirect("/admin/rankings?error=Cancel+or+complete+scheduled%2Flive+fights+before+making+this+fighter+inactive");
   }
+  if (parsed.data.status !== "ACTIVE" && (existing.poolMatchesAsRed.length > 0 || existing.poolMatchesAsBlue.length > 0)) {
+    redirect("/admin/rankings?error=Resolve+the+active+Fighter+Pool+match+before+changing+this+fighter%27s+status");
+  }
 
   let activeFighterId = existing.id;
   let assignedRank = existing.rank;
@@ -77,7 +82,7 @@ export async function updateFighterStatusAction(formData: FormData) {
     const replacement = await prisma.$transaction(async (tx) => {
       await tx.fighter.update({
         where: { id: existing.id },
-        data: { userId: null, rank: null, status: "INACTIVE" },
+        data: { userId: null, rank: null, status: "INACTIVE", minecraftUsername: null, minecraftUsernameNormalized: null },
       });
       const rank = await nextFighterRank(tx);
       const created = await tx.fighter.create({
@@ -86,6 +91,8 @@ export async function updateFighterStatusAction(formData: FormData) {
           rank,
           name: existing.name,
           nickname: existing.nickname,
+          minecraftUsername: existing.minecraftUsername,
+          minecraftUsernameNormalized: existing.minecraftUsernameNormalized,
           wins: 0,
           losses: 0,
           draws: 0,
@@ -113,6 +120,7 @@ export async function updateFighterStatusAction(formData: FormData) {
   } else {
     await prisma.$transaction(async (tx) => {
       if (parsed.data.status !== "ACTIVE") {
+        await tx.fighterPoolQueueEntry.deleteMany({ where: { fighterId: existing.id } });
         await tx.fightRequest.updateMany({
           where: {
             status: "PENDING",

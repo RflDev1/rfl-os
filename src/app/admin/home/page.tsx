@@ -41,6 +41,11 @@ export default async function AdminHomePage({
             <SearchableSelect name="userId" label="Registered player" options={eligibleUsers.map((user) => ({ value: user.id, label: user.displayName ?? user.name ?? "Unnamed player", details: "Active Discord account" }))} searchPlaceholder="Search player name…" placeholder="Choose an eligible player" help="Players already linked to a fighter are automatically excluded." />
             <label>Fighter name<input name="name" required maxLength={60} /></label>
             <label>Nickname<input name="nickname" maxLength={40} /></label>
+            <div className="form-row">
+              <label>Bedrock gamertag<input name="minecraftUsername" required maxLength={16} autoComplete="off" /></label>
+              <label>Repeat Bedrock gamertag<input name="minecraftUsernameConfirmation" required maxLength={16} autoComplete="off" /></label>
+            </div>
+            <p className="admin-guidance">The gamertag is private and used only to identify this fighter inside the RFL Minecraft server.</p>
             <p className="admin-guidance">Rank is assigned automatically after the current lowest-ranked fighter. Every new or returning fighter starts at 0-0-0.</p>
             <button className="button button-primary" type="submit">Add fighter</button>
           </form>
