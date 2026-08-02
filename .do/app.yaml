@@ -108,7 +108,7 @@ services:
       - key: COIN_FLIP_MAX_PLAYS_PER_MINUTE
         scope: RUN_TIME
         type: GENERAL
-        value: "20"
+        value: "12"
       - key: BLACKJACK_MIN_WAGER
         scope: RUN_TIME
         type: GENERAL
@@ -128,7 +128,7 @@ services:
       - key: BLACKJACK_MAX_ROUNDS_PER_MINUTE
         scope: RUN_TIME
         type: GENERAL
-        value: "10"
+        value: "6"
       - key: HIGH_LOW_MIN_WAGER
         scope: RUN_TIME
         type: GENERAL
@@ -148,7 +148,7 @@ services:
       - key: HIGH_LOW_MAX_ROUNDS_PER_MINUTE
         scope: RUN_TIME
         type: GENERAL
-        value: "10"
+        value: "6"
       - key: BET_MIN_WAGER
         scope: RUN_TIME
         type: GENERAL
@@ -160,11 +160,11 @@ services:
       - key: BET_MAX_PLACEMENTS_PER_MINUTE
         scope: RUN_TIME
         type: GENERAL
-        value: "20"
+        value: "10"
       - key: PACK_MAX_OPENINGS_PER_MINUTE
         scope: RUN_TIME
         type: GENERAL
-        value: "10"
+        value: "6"
       - key: MARKET_MIN_PRICE
         scope: RUN_TIME
         type: GENERAL
