@@ -15,15 +15,6 @@ function clientIp(request: NextRequest) {
     || "unknown";
 }
 
-function expectedProductionHosts() {
-  const hosts = new Set(["playrfl.com", "www.playrfl.com"]);
-  try {
-    const configured = process.env.APP_URL ? new URL(process.env.APP_URL).hostname.toLowerCase() : null;
-    if (configured) hosts.add(configured);
-  } catch { /* Environment validation reports malformed APP_URL elsewhere. */ }
-  return hosts;
-}
-
 function rateHeaders(decision: RateLimitDecision) {
   return {
     "RateLimit-Limit": String(decision.limit),
@@ -34,13 +25,6 @@ function rateHeaders(decision: RateLimitDecision) {
 
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
-
-  if (process.env.NODE_ENV === "production" && !EXEMPT_PATHS.some((prefix) => path.startsWith(prefix))) {
-    const hostname = request.nextUrl.hostname.toLowerCase();
-    if (!expectedProductionHosts().has(hostname)) {
-      return NextResponse.json({ error: "This host is not permitted." }, { status: 421 });
-    }
-  }
 
   if (EXEMPT_PATHS.some((prefix) => path.startsWith(prefix))) return NextResponse.next();
 
