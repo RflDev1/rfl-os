@@ -87,7 +87,7 @@ export async function getFighterPoolState(userId: string) {
   if (!fighter) return { enabled: env.FIGHT_POOL_ENABLED, fighter: null, inLobby: false, match: null, queuePosition: null, history: [] };
   const presenceCutoff = new Date(Date.now() - env.FIGHT_POOL_PRESENCE_TTL_SECONDS * 1000);
   const [presence, match, history] = await Promise.all([
-    fighter.minecraftUsernameNormalized ? prisma.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: fighter.minecraftUsernameNormalized, lastSeenAt: { gte: presenceCutoff }, server: { kind: "LOBBY" } } }) : null,
+    fighter.minecraftUsernameNormalized ? prisma.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: fighter.minecraftUsernameNormalized, lastSeenAt: { gte: presenceCutoff } } }) : null,
     prisma.fighterPoolMatch.findFirst({
       where: { status: { in: [...ACTIVE_MATCH_STATES] }, OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }] },
       include: { redFighter: true, blueFighter: true, assignedServer: true }, orderBy: { createdAt: "desc" },
@@ -121,7 +121,7 @@ export async function joinFighterPool(userId: string) {
     const active = await tx.fighterPoolMatch.findFirst({ where: { status: { in: [...ACTIVE_MATCH_STATES] }, OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }] } });
     if (active) return { matched: true, matchId: active.id };
     const cutoff = new Date(Date.now() - env.FIGHT_POOL_PRESENCE_TTL_SECONDS * 1000);
-    const present = await tx.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: fighter.minecraftUsernameNormalized, lastSeenAt: { gte: cutoff }, server: { kind: "LOBBY" } } });
+    const present = await tx.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: fighter.minecraftUsernameNormalized, lastSeenAt: { gte: cutoff } } });
     if (!present) throw new FighterPoolError("Join the RFL Bedrock lobby before entering the Fighter Pool.");
     await tx.fighterPoolQueueEntry.upsert({ where: { fighterId: fighter.id }, create: { fighterId: fighter.id, rank: fighter.rank }, update: { rank: fighter.rank } });
     const opponentEntry = await tx.fighterPoolQueueEntry.findFirst({
@@ -129,7 +129,7 @@ export async function joinFighterPool(userId: string) {
       include: { fighter: true }, orderBy: { joinedAt: "asc" },
     });
     if (!opponentEntry?.fighter.minecraftUsernameNormalized) return { matched: false, matchId: null };
-    const opponentPresent = await tx.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: opponentEntry.fighter.minecraftUsernameNormalized, lastSeenAt: { gte: cutoff }, server: { kind: "LOBBY" } } });
+    const opponentPresent = await tx.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: opponentEntry.fighter.minecraftUsernameNormalized, lastSeenAt: { gte: cutoff } } });
     if (!opponentPresent) { await tx.fighterPoolQueueEntry.delete({ where: { fighterId: opponentEntry.fighterId } }); return { matched: false, matchId: null }; }
     const server = await tx.fighterPoolServer.findFirst({ where: { kind: "ARENA", status: "AVAILABLE", currentMatchId: null, lastHeartbeatAt: { gte: cutoff } }, orderBy: { id: "asc" } });
     if (!server) return { matched: false, matchId: null };
