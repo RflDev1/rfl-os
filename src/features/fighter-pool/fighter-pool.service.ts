@@ -5,6 +5,7 @@ import { getEnv } from "@/lib/env";
 
 const ACTIVE_MATCH_STATES = ["AWAITING_CHECKIN", "READY", "LIVE"] as const;
 const MATCHMAKING_LOCK = 9_184_221;
+const SOLO_TEST_SERVER_ID = "admin-solo-test";
 
 export class FighterPoolError extends Error {}
 
@@ -249,4 +250,101 @@ export async function reviewPoolMatch(input: { matchId: string; actorId: string;
     await tx.adminAuditEntry.create({ data: { actorId: input.actorId, action: `FIGHT_POOL_RESULT_${input.action}`, targetType: "FighterPoolMatch", targetId: match.id, summary: { reason: input.reason, previousWinnerId: match.winnerFighterId, resultingWinnerId, disposition } } });
     return review;
   }, { isolationLevel: "Serializable" });
+}
+
+export async function simulateSoloPresence(input: { fighterId: string; actorId: string }) {
+  const fighter = await prisma.fighter.findUnique({ where: { id: input.fighterId } });
+  if (!fighter?.minecraftUsername || !fighter.minecraftUsernameNormalized) throw new FighterPoolError("Choose a fighter with a Bedrock gamertag.");
+  const minecraftUsername = fighter.minecraftUsername;
+  const minecraftUsernameNormalized = fighter.minecraftUsernameNormalized;
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.fighterPoolServer.upsert({
+      where: { id: SOLO_TEST_SERVER_ID },
+      create: { id: SOLO_TEST_SERVER_ID, kind: "TEST", publicAddress: "Admin simulation", port: 19132, status: "OFFLINE", lastHeartbeatAt: now },
+      update: { kind: "TEST", status: "OFFLINE", lastHeartbeatAt: now },
+    });
+    await tx.fighterPoolPresence.upsert({
+      where: { serverId_minecraftUsernameNormalized: { serverId: SOLO_TEST_SERVER_ID, minecraftUsernameNormalized } },
+      create: { serverId: SOLO_TEST_SERVER_ID, minecraftUsername, minecraftUsernameNormalized, lastSeenAt: now },
+      update: { minecraftUsername, lastSeenAt: now },
+    });
+    await tx.adminAuditEntry.create({ data: { actorId: input.actorId, action: "FIGHT_POOL_TEST_PRESENCE", targetType: "Fighter", targetId: fighter.id, summary: { minecraftUsername: fighter.minecraftUsername } } });
+  });
+}
+
+export async function createSoloTestMatch(input: { redFighterId: string; blueFighterId: string; actorId: string }) {
+  const env = getEnv();
+  if (input.redFighterId === input.blueFighterId) throw new FighterPoolError("Choose two different fighters.");
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
+    const testServer = await tx.fighterPoolServer.findUnique({ where: { id: SOLO_TEST_SERVER_ID }, include: { currentMatch: true } });
+    if (testServer?.currentMatch && ACTIVE_MATCH_STATES.includes(testServer.currentMatch.status as (typeof ACTIVE_MATCH_STATES)[number])) throw new FighterPoolError("Cancel or finish the active solo test match first.");
+    const fighters = await tx.fighter.findMany({ where: { id: { in: [input.redFighterId, input.blueFighterId] } } });
+    const red = fighters.find((fighter) => fighter.id === input.redFighterId);
+    const blue = fighters.find((fighter) => fighter.id === input.blueFighterId);
+    if (!red || !blue || red.status !== "ACTIVE" || blue.status !== "ACTIVE" || !red.userId || !blue.userId || !red.rank || !blue.rank || !red.minecraftUsernameNormalized || !blue.minecraftUsernameNormalized) {
+      throw new FighterPoolError("Both test fighters must be active, ranked, linked accounts with Bedrock gamertags.");
+    }
+    if (Math.abs(red.rank - blue.rank) > env.FIGHT_REQUEST_RANK_RANGE) throw new FighterPoolError(`Test fighters must be within ${env.FIGHT_REQUEST_RANK_RANGE} ranks.`);
+    const existing = await tx.fighterPoolMatch.findFirst({ where: { status: { in: [...ACTIVE_MATCH_STATES] }, OR: [{ redFighterId: { in: [red.id, blue.id] } }, { blueFighterId: { in: [red.id, blue.id] } }] } });
+    if (existing) throw new FighterPoolError("One of these fighters already has an active Fighter Pool match.");
+    const redCode = createFightCode(); const blueCode = createFightCode();
+    const match = await tx.fighterPoolMatch.create({ data: {
+      redFighterId: red.id, blueFighterId: blue.id, redRankSnapshot: red.rank, blueRankSnapshot: blue.rank,
+      redCodeHash: hashCode(redCode), redCodeEncrypted: encryptCode(redCode), blueCodeHash: hashCode(blueCode), blueCodeEncrypted: encryptCode(blueCode),
+      codeExpiresAt: new Date(Date.now() + env.FIGHT_POOL_CODE_TTL_MINUTES * 60_000), redCheckedInAt: new Date(), blueCheckedInAt: new Date(), status: "READY",
+      resultPayload: { soloTest: true, createdBy: input.actorId },
+    } });
+    await tx.fighterPoolQueueEntry.deleteMany({ where: { fighterId: { in: [red.id, blue.id] } } });
+    await tx.fighterPoolServer.upsert({
+      where: { id: SOLO_TEST_SERVER_ID },
+      create: { id: SOLO_TEST_SERVER_ID, kind: "TEST", publicAddress: "Admin simulation", port: 19132, status: "RESERVED", currentMatchId: match.id },
+      update: { kind: "TEST", status: "RESERVED", currentMatchId: match.id, lastHeartbeatAt: new Date() },
+    });
+    await tx.adminAuditEntry.create({ data: { actorId: input.actorId, action: "FIGHT_POOL_TEST_MATCH_CREATED", targetType: "FighterPoolMatch", targetId: match.id, summary: { redFighterId: red.id, blueFighterId: blue.id, recordsAndRewardsAreOfficial: true } } });
+    return match;
+  }, { isolationLevel: "Serializable" });
+}
+
+export async function recordSoloTestRound(input: { matchId: string; winnerFighterId: string; actorId: string }) {
+  const match = await prisma.fighterPoolMatch.findUnique({ where: { id: input.matchId }, include: { redFighter: true, blueFighter: true, assignedServer: true } });
+  if (!match || !ACTIVE_MATCH_STATES.includes(match.status as (typeof ACTIVE_MATCH_STATES)[number]) || match.assignedServer?.id !== SOLO_TEST_SERVER_ID) throw new FighterPoolError("Choose an active solo test match.");
+  const redWon = input.winnerFighterId === match.redFighterId;
+  const blueWon = input.winnerFighterId === match.blueFighterId;
+  if (!redWon && !blueWon) throw new FighterPoolError("That fighter is not in this match.");
+  const redRoundWins = match.redRoundWins + (redWon ? 1 : 0);
+  const blueRoundWins = match.blueRoundWins + (blueWon ? 1 : 0);
+  if (redRoundWins === 2 || blueRoundWins === 2) {
+    const completed = await completePoolMatch({
+      serverId: SOLO_TEST_SERVER_ID, matchId: match.id, reportId: `solo-test-${match.id}-${Date.now()}`,
+      winnerMinecraftUsername: redWon ? match.redFighter.minecraftUsername! : match.blueFighter.minecraftUsername!, redRoundWins, blueRoundWins,
+      payload: { soloTest: true, submittedBy: input.actorId },
+    });
+    await prisma.adminAuditEntry.create({ data: { actorId: input.actorId, action: "FIGHT_POOL_TEST_COMPLETED", targetType: "FighterPoolMatch", targetId: match.id, summary: { winnerFighterId: input.winnerFighterId, redRoundWins, blueRoundWins, recordsRankingsAndCrownsUpdated: true } } });
+    return completed;
+  }
+  const updated = await prisma.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "LIVE", startedAt: match.startedAt ?? new Date(), redRoundWins, blueRoundWins } });
+  await prisma.adminAuditEntry.create({ data: { actorId: input.actorId, action: "FIGHT_POOL_TEST_ROUND", targetType: "FighterPoolMatch", targetId: match.id, summary: { winnerFighterId: input.winnerFighterId, redRoundWins, blueRoundWins } } });
+  return updated;
+}
+
+export async function cancelSoloTestMatch(input: { matchId: string; actorId: string }) {
+  await prisma.$transaction(async (tx) => {
+    const match = await tx.fighterPoolMatch.findUnique({ where: { id: input.matchId }, include: { assignedServer: true } });
+    if (!match || !ACTIVE_MATCH_STATES.includes(match.status as (typeof ACTIVE_MATCH_STATES)[number]) || match.assignedServer?.id !== SOLO_TEST_SERVER_ID) throw new FighterPoolError("Choose an active solo test match.");
+    await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "CANCELLED" } });
+    await tx.fighterPoolServer.update({ where: { id: SOLO_TEST_SERVER_ID }, data: { currentMatchId: null, status: "OFFLINE" } });
+    await tx.adminAuditEntry.create({ data: { actorId: input.actorId, action: "FIGHT_POOL_TEST_CANCELLED", targetType: "FighterPoolMatch", targetId: match.id, summary: { recordsChanged: false, crownsChanged: false } } });
+  });
+}
+
+export async function resetSoloTestState(input: { actorId: string }) {
+  await prisma.$transaction(async (tx) => {
+    const active = await tx.fighterPoolServer.findUnique({ where: { id: SOLO_TEST_SERVER_ID }, include: { currentMatch: true } });
+    if (active?.currentMatch && ACTIVE_MATCH_STATES.includes(active.currentMatch.status as (typeof ACTIVE_MATCH_STATES)[number])) await tx.fighterPoolMatch.update({ where: { id: active.currentMatch.id }, data: { status: "CANCELLED" } });
+    await tx.fighterPoolPresence.deleteMany({ where: { serverId: SOLO_TEST_SERVER_ID } });
+    if (active) await tx.fighterPoolServer.update({ where: { id: SOLO_TEST_SERVER_ID }, data: { currentMatchId: null, status: "OFFLINE" } });
+    await tx.adminAuditEntry.create({ data: { actorId: input.actorId, action: "FIGHT_POOL_TEST_RESET", targetType: "FighterPoolServer", targetId: SOLO_TEST_SERVER_ID, summary: { completedResultsPreserved: true } } });
+  });
 }
