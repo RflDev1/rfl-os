@@ -17,9 +17,10 @@ This folder is the portable handoff for the Windows PC that will host the RFL Be
 2. Create two test fighter accounts with exact Bedrock gamertags and ranks no more than five apart.
 3. Both players join the lobby/server. Confirm the site shows “RFL lobby presence confirmed.” For a single-server local test, set this instance to `LOBBY`, verify presence, then switch it to `ARENA` and restart. Production should use separate lobby and arena instances.
 4. Change `FIGHT_POOL_ENABLED=true` on DigitalOcean and redeploy.
-5. Both fighters enter the pool and receive private codes. In Bedrock each uses `/rfl:fight CODE` (or `!fight CODE` if custom commands are unavailable).
-6. Play until one fighter wins two rounds. Confirm the match, record, rank, and 100-Crown default reward update once.
-7. In Control Center → Fighter Pool, open the completed match and test Uphold, Reverse, or Void with a test result.
+5. Both fighters enter the pool and receive private codes. In Bedrock each uses `/rfl:fight CODE` (or `!fight CODE` if custom commands are unavailable). Before the game begins, either fighter can cancel from PlayRFL; the match is cancelled for both fighters and the arena is released without changing records or Crowns.
+6. When the BedWars engine begins gameplay, the behavior pack emits `[RFL][MATCH_STARTED]` and the bridge signs a request to `POST /api/fighter-pool/bridge/start`. Confirm PlayRFL changes the match to `LIVE` and removes the cancellation option.
+7. Play until one fighter wins two rounds. Confirm the match, record, rank, and 100-Crown default reward update once.
+8. In Control Center → Fighter Pool, open the completed match and test Uphold, Reverse, or Void with a test result.
 
 ## Important operational limits
 

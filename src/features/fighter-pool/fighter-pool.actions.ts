@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/features/admin/authorization";
-import { cancelSoloTestMatch, createSoloTestMatch, FighterPoolError, joinFighterPool, leaveFighterPool, recordSoloTestRound, resetSoloTestState, reviewPoolMatch, simulateSoloPresence } from "./fighter-pool.service";
+import { cancelSoloTestMatch, cancelUnstartedPoolMatch, createSoloTestMatch, FighterPoolError, joinFighterPool, leaveFighterPool, recordSoloTestRound, resetSoloTestState, reviewPoolMatch, simulateSoloPresence } from "./fighter-pool.service";
 import { poolReviewSchema } from "./fighter-pool.schema";
 
 function poolRedirect(message: string, error = false): never {
@@ -27,6 +27,14 @@ export async function leaveFighterPoolAction() {
   if (!session) redirect("/signin");
   await leaveFighterPool(session.user.id);
   poolRedirect("You left the Fighter Pool.");
+}
+
+export async function cancelFighterPoolMatchAction() {
+  const session = await auth();
+  if (!session) redirect("/signin");
+  try { await cancelUnstartedPoolMatch(session.user.id); }
+  catch (error) { poolRedirect(error instanceof FighterPoolError ? error.message : "The match could not be cancelled.", true); }
+  poolRedirect("Your unstarted Fighter Pool match was cancelled. Records and Crowns were not changed.");
 }
 
 export async function reviewPoolMatchAction(formData: FormData) {

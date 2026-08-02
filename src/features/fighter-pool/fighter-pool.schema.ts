@@ -17,6 +17,7 @@ export const heartbeatSchema = z.object({
 });
 
 export const checkInSchema = z.object({ serverId: z.string().min(1).max(80), code: z.string().trim().min(6).max(16), minecraftUsername: z.string().trim().min(1).max(16) });
+export const matchStartedSchema = z.object({ serverId: z.string().trim().min(1).max(80), matchId: z.string().cuid() });
 export const resultSchema = z.object({
   serverId: z.string().trim().min(1).max(80), matchId: z.string().cuid(), reportId: z.string().uuid(), winnerMinecraftUsername: z.string().trim().min(1).max(16),
   redRoundWins: z.number().int().min(0).max(2), blueRoundWins: z.number().int().min(0).max(2),

@@ -108,6 +108,7 @@ export async function getFighterPoolState(userId: string) {
     serverAddress: match.assignedServer?.publicAddress ?? null,
     serverPort: match.assignedServer?.port ?? null,
     checkedIn: match.redFighterId === fighter.id ? Boolean(match.redCheckedInAt) : Boolean(match.blueCheckedInAt),
+    canCancel: match.startedAt === null && ["AWAITING_CHECKIN", "READY"].includes(match.status),
   } : null;
   return { enabled: env.FIGHT_POOL_ENABLED, fighter, inLobby: Boolean(presence), match: participantMatch, queuePosition, history };
 }
@@ -152,6 +153,30 @@ export async function leaveFighterPool(userId: string) {
   if (fighter) await prisma.fighterPoolQueueEntry.deleteMany({ where: { fighterId: fighter.id } });
 }
 
+export async function cancelUnstartedPoolMatch(userId: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
+    const fighter = await tx.fighter.findUnique({ where: { userId }, select: { id: true } });
+    if (!fighter) throw new FighterPoolError("An active Fighter Pool match was not found.");
+    const match = await tx.fighterPoolMatch.findFirst({
+      where: { status: { in: ["AWAITING_CHECKIN", "READY"] }, OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }] },
+      include: { assignedServer: true },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!match) throw new FighterPoolError("This match has already started or is no longer active.");
+    if (match.startedAt) throw new FighterPoolError("A match cannot be cancelled after Minecraft gameplay begins.");
+    await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "CANCELLED" } });
+    await tx.fighterPoolQueueEntry.deleteMany({ where: { fighterId: { in: [match.redFighterId, match.blueFighterId] } } });
+    if (match.assignedServer) {
+      await tx.fighterPoolServer.update({
+        where: { id: match.assignedServer.id },
+        data: { status: match.assignedServer.id === SOLO_TEST_SERVER_ID ? "OFFLINE" : "AVAILABLE", currentMatchId: null },
+      });
+    }
+    return match;
+  }, { isolationLevel: "Serializable" });
+}
+
 export async function recordPoolServerHeartbeat(input: { serverId: string; kind: "LOBBY" | "ARENA"; publicAddress: string; port: number; status: "AVAILABLE" | "OFFLINE"; players: string[] }) {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -170,6 +195,7 @@ export async function recordPoolServerHeartbeat(input: { serverId: string; kind:
 
 export async function checkInToPoolMatch(input: { code: string; minecraftUsername: string; serverId: string }) {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
     const codeHash = hashCode(input.code.trim().toUpperCase());
     const match = await tx.fighterPoolMatch.findFirst({ where: { status: "AWAITING_CHECKIN", codeExpiresAt: { gt: new Date() }, OR: [{ redCodeHash: codeHash }, { blueCodeHash: codeHash }] }, include: { redFighter: true, blueFighter: true, assignedServer: true } });
     if (!match || match.assignedServer?.id !== input.serverId) throw new FighterPoolError("That fight code is invalid, expired, or assigned to another arena.");
@@ -191,9 +217,21 @@ export async function checkInToPoolMatch(input: { code: string; minecraftUsernam
   });
 }
 
+export async function startPoolMatch(input: { serverId: string; matchId: string }) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
+    const match = await tx.fighterPoolMatch.findUnique({ where: { id: input.matchId }, include: { assignedServer: true } });
+    if (!match || match.assignedServer?.id !== input.serverId) throw new FighterPoolError("This match is not assigned to this arena server.");
+    if (match.status === "LIVE" && match.startedAt) return match;
+    if (match.status !== "READY" || match.startedAt) throw new FighterPoolError("This match is not ready to start.");
+    return tx.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "LIVE", startedAt: new Date() } });
+  }, { isolationLevel: "Serializable" });
+}
+
 export async function completePoolMatch(input: { serverId: string; matchId: string; reportId: string; winnerMinecraftUsername: string; redRoundWins: number; blueRoundWins: number; payload: Prisma.InputJsonValue }) {
   const env = getEnv();
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`pool-result:${input.matchId}`})) IS NULL AS "locked"`;
     const duplicate = await tx.fighterPoolMatch.findFirst({ where: { resultReportId: input.reportId } });
     if (duplicate) return duplicate;

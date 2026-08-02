@@ -22,6 +22,7 @@ if (!existsSync(executable)) fail(`bedrock_server.exe was not found in ${config.
 let onlinePlayers = [];
 let assignment = null;
 let roundWins = { RED: 0, BLUE: 0 };
+let startedMatchId = null;
 let stopping = false;
 const disconnects = new Map();
 const server = spawn(executable, [], { cwd: config.bdsDirectory, stdio: ["pipe", "pipe", "pipe"], windowsHide: false });
@@ -48,6 +49,7 @@ async function heartbeat() {
     if (response.currentMatch && assignment?.id !== response.currentMatch.id) {
       assignment = response.currentMatch;
       roundWins = { RED: 0, BLUE: 0 };
+      startedMatchId = null;
       console.log(`[RFL] Reserved for match ${assignment.id}.`);
     }
     if (!response.currentMatch && assignment && roundWins.RED === 0 && roundWins.BLUE === 0) assignment = null;
@@ -59,6 +61,15 @@ async function handleLine(line) {
   if (list) {
     onlinePlayers = list[1].split(",").map((value) => value.trim()).filter(Boolean);
     monitorDisconnects();
+  }
+
+  const started = marker(line, "[RFL][MATCH_STARTED]");
+  if (started && assignment?.id && startedMatchId !== assignment.id) {
+    try {
+      await post("/api/fighter-pool/bridge/start", { serverId: config.serverId, matchId: assignment.id });
+      startedMatchId = assignment.id;
+      console.log(`[RFL] Match ${assignment.id} marked live on PlayRFL.`);
+    } catch (error) { console.error(`[RFL] Match start submission failed: ${error.message}`); }
   }
 
   const checkIn = marker(line, "[RFL][FIGHT_CODE]") ?? chatFightCode(line);
@@ -126,6 +137,7 @@ async function finalizeSeries(winnerTeam, winnerMinecraftUsername, detail) {
     });
     broadcast(`§a[RFL] Series complete. ${winnerMinecraftUsername} wins and the official result was recorded.`);
     assignment = null;
+    startedMatchId = null;
     roundWins = { RED: 0, BLUE: 0 };
     disconnects.clear();
   } catch (error) { console.error(`[RFL] Result submission failed and will require admin review: ${error.message}`); }

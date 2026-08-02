@@ -119,6 +119,7 @@ export class BedWarsEngine {
     this.match.elapsedTicks = 0;
     this.match.phase = Phase.LIVE;
     this.match.phaseTicks = 0;
+    console.warn(`[RFL][MATCH_STARTED] ${JSON.stringify({ startedAt: new Date().toISOString() })}`);
     for (const state of this.match.players.values()) {
       const player = this.onlinePlayer(state.id);
       if (!player) { state.disconnected = true; continue; }
