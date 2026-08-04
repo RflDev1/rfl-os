@@ -189,7 +189,7 @@ export async function recordPoolServerHeartbeat(input: { serverId: string; kind:
     await tx.fighterPoolPresence.deleteMany({ where: { serverId: input.serverId } });
     if (input.players.length) await tx.fighterPoolPresence.createMany({ data: [...new Map(input.players.map((name) => [normalizeGamertag(name), name.trim()])).entries()].map(([normalized, name]) => ({ serverId: input.serverId, minecraftUsername: name, minecraftUsernameNormalized: normalized, lastSeenAt: now })) });
     const currentMatch = server.currentMatchId ? await tx.fighterPoolMatch.findUnique({ where: { id: server.currentMatchId }, include: { redFighter: true, blueFighter: true } }) : null;
-    return { server, currentMatch: currentMatch ? { id: currentMatch.id, status: currentMatch.status, redMinecraftUsername: currentMatch.redFighter.minecraftUsername, blueMinecraftUsername: currentMatch.blueFighter.minecraftUsername } : null };
+    return { server, presenceCount: input.players.length, currentMatch: currentMatch ? { id: currentMatch.id, status: currentMatch.status, redMinecraftUsername: currentMatch.redFighter.minecraftUsername, blueMinecraftUsername: currentMatch.blueFighter.minecraftUsername } : null };
   });
 }
 

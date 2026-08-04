@@ -27,6 +27,7 @@ This folder is the portable handoff for the Windows PC that will host the RFL Be
 - This is a test host, not yet a hardened public game-server fleet.
 - One BDS arena process hosts one fight at a time. More simultaneous fights require separate BDS instance directories, ports, and unique `RFL_SERVER_ID` values.
 - The bridge authenticates requests with HMAC-SHA-256 and rejects stale requests. Keep the Windows clock synchronized.
+- Every accepted heartbeat returns `presenceCount`. With one connected Bedrock player, this must be `1`; a value of `0` means the bridge is connected but is not sending the player's gamertag.
 - A power loss during a match can require an admin to resolve or void it.
 - The supplied gameplay pack resets its arena between rounds. Fully test map restoration, disconnect behavior, and result reporting before allowing official records.
 - Do not expose RCON or any database port to the internet.

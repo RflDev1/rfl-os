@@ -9,5 +9,5 @@ export async function POST(request: Request) {
   const parsed = heartbeatSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) return NextResponse.json({ error: "Invalid heartbeat.", details: parsed.error.flatten() }, { status: 400 });
   const result = await recordPoolServerHeartbeat(parsed.data);
-  return NextResponse.json({ accepted: true, currentMatch: result.currentMatch });
+  return NextResponse.json({ accepted: true, presenceCount: result.presenceCount, currentMatch: result.currentMatch });
 }

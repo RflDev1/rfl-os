@@ -20,6 +20,7 @@ const executable = join(config.bdsDirectory, "bedrock_server.exe");
 if (!existsSync(executable)) fail(`bedrock_server.exe was not found in ${config.bdsDirectory}`);
 
 let onlinePlayers = [];
+let pendingListCount = null;
 let assignment = null;
 let roundWins = { RED: 0, BLUE: 0 };
 let startedMatchId = null;
@@ -57,9 +58,30 @@ async function heartbeat() {
 }
 
 async function handleLine(line) {
-  const list = line.match(/There are \d+\/\d+ players online:\s*(.*)$/i);
+  const consoleMessage = cleanConsoleMessage(line);
+  const connected = consoleMessage.match(/^Player connected:\s*(.+?)(?:,\s*xuid:.*)?$/i);
+  if (connected?.[1]) setPlayerOnline(connected[1]);
+  const disconnected = consoleMessage.match(/^Player disconnected:\s*(.+?)(?:,\s*xuid:.*)?$/i);
+  if (disconnected?.[1]) setPlayerOffline(disconnected[1]);
+
+  const list = consoleMessage.match(/^There are (\d+)\/\d+ players online:\s*(.*)$/i);
   if (list) {
-    onlinePlayers = list[1].split(",").map((value) => value.trim()).filter(Boolean);
+    const count = Number(list[1]);
+    const sameLinePlayers = parsePlayerList(list[2]);
+    if (count === 0) {
+      onlinePlayers = [];
+      pendingListCount = null;
+    } else if (sameLinePlayers.length) {
+      onlinePlayers = sameLinePlayers.slice(0, count);
+      pendingListCount = null;
+    } else {
+      pendingListCount = count;
+    }
+    monitorDisconnects();
+  } else if (pendingListCount !== null) {
+    const nextLinePlayers = parsePlayerList(consoleMessage);
+    if (nextLinePlayers.length) onlinePlayers = nextLinePlayers.slice(0, pendingListCount);
+    pendingListCount = null;
     monitorDisconnects();
   }
 
@@ -154,6 +176,15 @@ async function post(path, body) {
 }
 
 function marker(line, name) { const index = line.indexOf(name); if (index < 0) return null; try { return JSON.parse(line.slice(index + name.length).trim()); } catch { return null; } }
+function cleanConsoleMessage(line) { return String(line).replace(/^(?:\[[^\]]*\]\s*)+/, "").trim(); }
+function parsePlayerList(value) {
+  const text = String(value).trim();
+  if (!text) return [];
+  const withXuids = [...text.matchAll(/(?:^|,\s*)([^,]+),\s*xuid:\s*[^,]+/gi)].map((match) => match[1].trim()).filter(Boolean);
+  return withXuids.length ? withXuids : text.split(",").map((name) => name.trim()).filter(Boolean);
+}
+function setPlayerOnline(name) { const value = String(name).trim(); if (value && !onlinePlayers.some((player) => normalize(player) === normalize(value))) onlinePlayers.push(value); }
+function setPlayerOffline(name) { const key = normalize(name); onlinePlayers = onlinePlayers.filter((player) => normalize(player) !== key); }
 function chatFightCode(line) { const match = line.match(/<([^>]+)>\s*!(?:fight|code)\s+([A-Z0-9]{8})\b/i); return match ? { minecraftUsername: match[1].trim(), code: match[2].toUpperCase() } : null; }
 function command(value) { if (server.stdin.writable) server.stdin.write(value + "\n"); }
 function tell(player, message, error = false) { command(`tellraw "${String(player).replaceAll('"', '\\"')}" ${JSON.stringify({ rawtext: [{ text: `${error ? "§c" : "§a"}[RFL] ${message}` }] })}`); }
