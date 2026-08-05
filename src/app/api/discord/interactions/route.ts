@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { getEnv } from "@/lib/env";
 import { assertGuildOwner, createRflTicket, loadRflDiscordServer } from "@/features/discord/server-loader";
 import { syncFightStreamChannel } from "@/features/discord/stream-channel";
+import { deactivateEmergencyLockdown } from "@/lib/emergency-lockdown";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,6 +103,22 @@ export async function POST(request: Request) {
       }
     });
     return Response.json({ type: 5, data: { flags: EPHEMERAL } });
+  }
+
+  if (interaction.type === 2 && interaction.data?.name === "unlockrfl") {
+    try {
+      await assertGuildOwner(config, user.id);
+    } catch {
+      return response("Only the Discord server owner can use `/unlockrfl`.");
+    }
+
+    try {
+      await deactivateEmergencyLockdown(user.id);
+      return response("✅ RFL emergency lockdown has been removed. The site is available again.");
+    } catch (error) {
+      console.error("[rfl-security] Emergency unlock failed", error);
+      return response("❌ RFL could not be unlocked. Check the application and database logs.");
+    }
   }
 
   if (interaction.type === 3 && interaction.data?.custom_id?.startsWith("rfl-ticket:")) {

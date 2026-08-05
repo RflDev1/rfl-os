@@ -235,6 +235,18 @@ model LegalAcceptance {
   @@map("legal_acceptances")
 }
 
+model EmergencyLock {
+  id              String    @id
+  active          Boolean   @default(false)
+  activatedAt     DateTime? @map("activated_at")
+  activationCause String?   @map("activation_cause")
+  unlockedAt      DateTime? @map("unlocked_at")
+  unlockedBy      String?   @map("unlocked_by")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("emergency_locks")
+}
+
 model Event {
   id        String      @id @default(cuid())
   title     String

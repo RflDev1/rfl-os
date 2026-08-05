@@ -23,6 +23,7 @@
     "test:watch": "vitest",
     "test:e2e": "tsx scripts/test-e2e.ts",
     "test:e2e:run": "playwright test",
+    "test:load:local": "tsx scripts/test-load-local.ts",
     "deploy:check": "tsx scripts/deploy-preflight.ts",
     "discord:register": "tsx --env-file=.env scripts/register-discord-commands.ts",
     "db:generate": "prisma generate",
