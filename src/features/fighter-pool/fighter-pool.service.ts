@@ -91,7 +91,10 @@ export async function getFighterPoolState(userId: string) {
   const [presence, match, history] = await Promise.all([
     fighter.minecraftUsernameNormalized ? prisma.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: fighter.minecraftUsernameNormalized, lastSeenAt: { gte: presenceCutoff } } }) : null,
     prisma.fighterPoolMatch.findFirst({
-      where: { OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }], AND: [{ OR: [{ status: { in: [...ACTIVE_MATCH_STATES] } }, { status: "COMPLETED", completedAt: { gte: new Date(Date.now() - 30 * 60_000) } }] }] },
+      where: { OR: [
+        { status: { in: [...ACTIVE_MATCH_STATES] }, OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }] },
+        { status: "COMPLETED", completedAt: { gte: new Date(Date.now() - 30 * 60_000) }, OR: [{ redFighterId: fighter.id, redExitedAt: null }, { blueFighterId: fighter.id, blueExitedAt: null }] },
+      ] },
       include: { redFighter: true, blueFighter: true, assignedServer: true, rounds: { orderBy: { roundNumber: "asc" } } }, orderBy: { createdAt: "desc" },
     }),
     prisma.fighterPoolMatch.findMany({
@@ -168,6 +171,24 @@ export async function joinFighterPool(userId: string) {
 export async function leaveFighterPool(userId: string) {
   const fighter = await prisma.fighter.findUnique({ where: { userId }, select: { id: true } });
   if (fighter) await prisma.fighterPoolQueueEntry.deleteMany({ where: { fighterId: fighter.id } });
+}
+
+export async function exitCompletedPoolMatch(userId: string) {
+  return prisma.$transaction(async (tx) => {
+    const fighter = await tx.fighter.findUnique({ where: { userId }, select: { id: true } });
+    if (!fighter) throw new FighterPoolError("An RFL fighter profile is required.");
+    const match = await tx.fighterPoolMatch.findFirst({
+      where: { status: "COMPLETED", OR: [{ redFighterId: fighter.id, redExitedAt: null }, { blueFighterId: fighter.id, blueExitedAt: null }] },
+      orderBy: { completedAt: "desc" },
+      select: { id: true, redFighterId: true },
+    });
+    if (!match) throw new FighterPoolError("There is no completed Fighter Pool match to exit.");
+    await tx.fighterPoolMatch.update({
+      where: { id: match.id },
+      data: match.redFighterId === fighter.id ? { redExitedAt: new Date() } : { blueExitedAt: new Date() },
+    });
+    return match;
+  });
 }
 
 export async function cancelUnstartedPoolMatch(userId: string) {

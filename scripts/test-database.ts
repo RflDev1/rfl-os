@@ -81,6 +81,7 @@ try {
     "20260801010000_fighter_pool",
     "20260805010000_emergency_lockdown",
     "20260808010000_fighter_pool_live_reporting",
+    "20260809010000_fighter_pool_completed_exit",
   ]);
 
   const player = await prisma.user.create({

@@ -349,6 +349,8 @@ model FighterPoolMatch {
   blueCodeEncrypted    String   @map("blue_code_encrypted")
   redCheckedInAt       DateTime? @map("red_checked_in_at")
   blueCheckedInAt      DateTime? @map("blue_checked_in_at")
+  redExitedAt          DateTime? @map("red_exited_at")
+  blueExitedAt         DateTime? @map("blue_exited_at")
   redRoundWins         Int      @default(0) @map("red_round_wins")
   blueRoundWins        Int      @default(0) @map("blue_round_wins")
   arenaServerId        String?  @map("arena_server_id")

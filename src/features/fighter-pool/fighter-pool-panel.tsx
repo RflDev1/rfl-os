@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { cancelFighterPoolMatchAction, joinFighterPoolAction, leaveFighterPoolAction } from "./fighter-pool.actions";
+import { cancelFighterPoolMatchAction, exitCompletedPoolMatchAction, joinFighterPoolAction, leaveFighterPoolAction } from "./fighter-pool.actions";
 
 type PoolState = {
   enabled: boolean; inLobby: boolean; queuePosition: number | null;
@@ -35,6 +35,7 @@ function LiveMatchSummary({ match }: { match: NonNullable<PoolState["match"]> })
       <article className="pool-team-blue"><span>Blue</span><strong>{live.blue.fighterName}</strong><small>{live.blue.minecraftUsername}</small><b>{live.blue.roundWins}</b>{disconnected === live.blue.minecraftUsername?.toLocaleLowerCase("en-US") ? <em>Disconnected — reconnect by {live.reconnectDeadlineAt ? new Date(live.reconnectDeadlineAt).toLocaleTimeString() : "soon"}</em> : null}</article>
     </div>
     <div className="pool-round-history"><h3>Rounds</h3>{live.rounds.length ? <ol>{live.rounds.map((round) => <li key={round.roundId}><span>Round {round.roundNumber}</span><strong>{round.winnerMinecraftUsername} ({round.winnerTeam === "RED" ? "Red" : "Blue"})</strong></li>)}</ol> : <p>Round results will appear here immediately.</p>}</div>
+    {match.status === "COMPLETED" ? <form action={exitCompletedPoolMatchAction}><button className="button button-primary">Exit Fighter Pool</button><p>You can join the Fighter Pool again after exiting.</p></form> : null}
   </section>;
 }
 

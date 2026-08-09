@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/features/admin/authorization";
-import { cancelSoloTestMatch, cancelUnstartedPoolMatch, createSoloTestMatch, FighterPoolError, joinFighterPool, leaveFighterPool, recordSoloTestRound, resetSoloTestState, reviewPoolMatch, simulateSoloPresence } from "./fighter-pool.service";
+import { cancelSoloTestMatch, cancelUnstartedPoolMatch, createSoloTestMatch, exitCompletedPoolMatch, FighterPoolError, joinFighterPool, leaveFighterPool, recordSoloTestRound, resetSoloTestState, reviewPoolMatch, simulateSoloPresence } from "./fighter-pool.service";
 import { poolReviewSchema } from "./fighter-pool.schema";
 
 function poolRedirect(message: string, error = false): never {
@@ -27,6 +27,14 @@ export async function leaveFighterPoolAction() {
   if (!session) redirect("/signin");
   await leaveFighterPool(session.user.id);
   poolRedirect("You left the Fighter Pool.");
+}
+
+export async function exitCompletedPoolMatchAction() {
+  const session = await auth();
+  if (!session) redirect("/signin");
+  try { await exitCompletedPoolMatch(session.user.id); }
+  catch (error) { poolRedirect(error instanceof FighterPoolError ? error.message : "The completed match could not be exited.", true); }
+  poolRedirect("You exited the completed match and can join the Fighter Pool again.");
 }
 
 export async function cancelFighterPoolMatchAction() {
