@@ -77,6 +77,10 @@ try {
     "20260724230000_discord_fight_reminders",
     "20260726010000_database_card_images",
     "20260729010000_card_supply_limits",
+    "20260729200000_add_age_and_legal_consent",
+    "20260801010000_fighter_pool",
+    "20260805010000_emergency_lockdown",
+    "20260808010000_fighter_pool_live_reporting",
   ]);
 
   const player = await prisma.user.create({

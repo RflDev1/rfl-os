@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
+import type { FighterPoolLiveEventInput } from "./fighter-pool.schema";
 
 const ACTIVE_MATCH_STATES = ["AWAITING_CHECKIN", "READY", "LIVE"] as const;
 const MATCHMAKING_LOCK = 9_184_221;
@@ -90,8 +91,8 @@ export async function getFighterPoolState(userId: string) {
   const [presence, match, history] = await Promise.all([
     fighter.minecraftUsernameNormalized ? prisma.fighterPoolPresence.findFirst({ where: { minecraftUsernameNormalized: fighter.minecraftUsernameNormalized, lastSeenAt: { gte: presenceCutoff } } }) : null,
     prisma.fighterPoolMatch.findFirst({
-      where: { status: { in: [...ACTIVE_MATCH_STATES] }, OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }] },
-      include: { redFighter: true, blueFighter: true, assignedServer: true }, orderBy: { createdAt: "desc" },
+      where: { OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }], AND: [{ OR: [{ status: { in: [...ACTIVE_MATCH_STATES] } }, { status: "COMPLETED", completedAt: { gte: new Date(Date.now() - 30 * 60_000) } }] }] },
+      include: { redFighter: true, blueFighter: true, assignedServer: true, rounds: { orderBy: { roundNumber: "asc" } } }, orderBy: { createdAt: "desc" },
     }),
     prisma.fighterPoolMatch.findMany({
       where: { status: "COMPLETED", OR: [{ redFighterId: fighter.id }, { blueFighterId: fighter.id }] },
@@ -99,16 +100,32 @@ export async function getFighterPoolState(userId: string) {
     }),
   ]);
   const queuePosition = fighter.poolQueueEntry ? await prisma.fighterPoolQueueEntry.count({ where: { joinedAt: { lte: fighter.poolQueueEntry.joinedAt } } }) : null;
+  const isLiveSummary = match ? Boolean(match.startedAt || match.currentRound || match.rounds.length || match.status === "COMPLETED") : false;
   const participantMatch = match ? {
     id: match.id,
     status: match.status,
     opponent: match.redFighterId === fighter.id ? match.blueFighter.name : match.redFighter.name,
-    code: decryptFightCode(match.redFighterId === fighter.id ? match.redCodeEncrypted : match.blueCodeEncrypted),
+    code: isLiveSummary ? null : decryptFightCode(match.redFighterId === fighter.id ? match.redCodeEncrypted : match.blueCodeEncrypted),
     expiresAt: match.codeExpiresAt,
     serverAddress: match.assignedServer?.publicAddress ?? null,
     serverPort: match.assignedServer?.port ?? null,
     checkedIn: match.redFighterId === fighter.id ? Boolean(match.redCheckedInAt) : Boolean(match.blueCheckedInAt),
+    checkIn: {
+      red: { fighterName: match.redFighter.name, minecraftUsername: match.redFighter.minecraftUsername, checkedIn: Boolean(match.redCheckedInAt) },
+      blue: { fighterName: match.blueFighter.name, minecraftUsername: match.blueFighter.minecraftUsername, checkedIn: Boolean(match.blueCheckedInAt) },
+    },
     canCancel: match.startedAt === null && ["AWAITING_CHECKIN", "READY"].includes(match.status),
+    live: isLiveSummary ? {
+      red: { fighterName: match.redFighter.name, minecraftUsername: match.redFighter.minecraftUsername, checkedIn: Boolean(match.redCheckedInAt), roundWins: match.redRoundWins },
+      blue: { fighterName: match.blueFighter.name, minecraftUsername: match.blueFighter.minecraftUsername, checkedIn: Boolean(match.blueCheckedInAt), roundWins: match.blueRoundWins },
+      currentRound: match.currentRound,
+      countdownSeconds: match.countdownSeconds,
+      countdownStartedAt: match.countdownStartedAt,
+      disconnectedUsername: match.disconnectedUsername,
+      reconnectDeadlineAt: match.reconnectDeadlineAt,
+      winnerFighterName: match.winnerFighterId === match.redFighterId ? match.redFighter.name : match.winnerFighterId === match.blueFighterId ? match.blueFighter.name : null,
+      rounds: match.rounds.map((round) => ({ roundId: round.roundId, roundNumber: round.roundNumber, winnerTeam: round.winnerTeam, winnerMinecraftUsername: round.winnerMinecraftUsername, redRoundWins: round.redRoundWins, blueRoundWins: round.blueRoundWins })),
+    } : null,
   } : null;
   return { enabled: env.FIGHT_POOL_ENABLED, fighter, inLobby: Boolean(presence), match: participantMatch, queuePosition, history };
 }
@@ -140,7 +157,7 @@ export async function joinFighterPool(userId: string) {
       redFighterId: opponentEntry.fighter.id, blueFighterId: fighter.id,
       redRankSnapshot: opponentEntry.fighter.rank!, blueRankSnapshot: fighter.rank,
       redCodeHash: hashCode(redCode), redCodeEncrypted: encryptCode(redCode), blueCodeHash: hashCode(blueCode), blueCodeEncrypted: encryptCode(blueCode),
-      codeExpiresAt: new Date(Date.now() + env.FIGHT_POOL_CODE_TTL_MINUTES * 60_000),
+      codeExpiresAt: new Date(Date.now() + env.FIGHT_POOL_CODE_TTL_MINUTES * 60_000), arenaServerId: server.id,
     } });
     await tx.fighterPoolQueueEntry.deleteMany({ where: { fighterId: { in: [fighter.id, opponentEntry.fighter.id] } } });
     await tx.fighterPoolServer.update({ where: { id: server.id }, data: { status: "RESERVED", currentMatchId: match.id } });
@@ -202,6 +219,7 @@ export async function checkInToPoolMatch(input: { code: string; minecraftUsernam
     const red = match.redCodeHash === codeHash;
     const expected = normalizeGamertag(red ? match.redFighter.minecraftUsername! : match.blueFighter.minecraftUsername!);
     if (normalizeGamertag(input.minecraftUsername) !== expected) throw new FighterPoolError("This gamertag is not assigned to that fight code.");
+    if (red ? match.redCheckedInAt : match.blueCheckedInAt) throw new FighterPoolError("That fight code has already been consumed.");
     const updated = await tx.fighterPoolMatch.update({ where: { id: match.id }, data: red ? { redCheckedInAt: new Date() } : { blueCheckedInAt: new Date() } });
     const ready = Boolean(updated.redCheckedInAt && updated.blueCheckedInAt);
     if (ready) await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "READY" } });
@@ -217,6 +235,95 @@ export async function checkInToPoolMatch(input: { code: string; minecraftUsernam
   });
 }
 
+function assertAssignedPlayers(match: { redFighter: { name: string; minecraftUsername: string | null; minecraftUsernameNormalized: string | null }; blueFighter: { name: string; minecraftUsername: string | null; minecraftUsernameNormalized: string | null } }, players: Array<{ team: "RED" | "BLUE"; fighterName: string; minecraftUsername: string }>) {
+  const red = players.find((player) => player.team === "RED");
+  const blue = players.find((player) => player.team === "BLUE");
+  if (!red || !blue || normalizeGamertag(red.minecraftUsername) !== match.redFighter.minecraftUsernameNormalized || normalizeGamertag(blue.minecraftUsername) !== match.blueFighter.minecraftUsernameNormalized || red.fighterName !== match.redFighter.name || blue.fighterName !== match.blueFighter.name) {
+    throw new FighterPoolError("Event players do not match this Fighter Pool assignment.");
+  }
+}
+
+function assignedTeam(match: { redFighter: { minecraftUsernameNormalized: string | null }; blueFighter: { minecraftUsernameNormalized: string | null } }, username: string) {
+  const normalized = normalizeGamertag(username);
+  if (normalized === match.redFighter.minecraftUsernameNormalized) return "RED" as const;
+  if (normalized === match.blueFighter.minecraftUsernameNormalized) return "BLUE" as const;
+  throw new FighterPoolError("That Minecraft username is not assigned to this match.");
+}
+
+export async function recordPoolLiveEvent(input: FighterPoolLiveEventInput) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`pool-event:${input.matchId}`})) IS NULL AS "locked"`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`pool-event-id:${input.eventId}`})) IS NULL AS "locked"`;
+    const existing = await tx.fighterPoolLiveEvent.findUnique({ where: { eventId: input.eventId } });
+    if (existing) {
+      const samePayload = JSON.stringify(existing.data) === JSON.stringify(input.data);
+      const sameOccurredAt = existing.occurredAt.getTime() === new Date(input.occurredAt).getTime();
+      if (existing.matchId !== input.matchId || existing.serverId !== input.serverId || existing.type !== input.type || !samePayload || !sameOccurredAt) throw new FighterPoolError("That event identifier conflicts with an earlier event.");
+      return { duplicate: true };
+    }
+    const match = await tx.fighterPoolMatch.findUnique({ where: { id: input.matchId }, include: { redFighter: true, blueFighter: true, assignedServer: true } });
+    if (!match) throw new FighterPoolError("Fighter Pool match not found.");
+    const serverExists = await tx.fighterPoolServer.findUnique({ where: { id: input.serverId }, select: { id: true } });
+    if (!serverExists) throw new FighterPoolError("Fighter Pool server not found.");
+    const arenaServerId = match.arenaServerId ?? match.assignedServer?.id;
+    if (arenaServerId !== input.serverId) throw new FighterPoolError("This match is assigned to another arena server.");
+    const occurredAt = new Date(input.occurredAt);
+    if (input.type === "FIGHTER_CHECKED_IN") {
+      const data = input.data;
+      assertAssignedPlayers(match, data.players);
+      const team = assignedTeam(match, data.minecraftUsername);
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: team === "RED" ? { redCheckedInAt: match.redCheckedInAt ?? occurredAt } : { blueCheckedInAt: match.blueCheckedInAt ?? occurredAt } });
+    } else if (input.type === "MATCH_READY") {
+      const data = input.data;
+      assertAssignedPlayers(match, data.players);
+      if (!match.redCheckedInAt || !match.blueCheckedInAt) throw new FighterPoolError("Both fighters must check in before the match is ready.");
+      if (!["AWAITING_CHECKIN", "READY"].includes(match.status)) throw new FighterPoolError("This match cannot return to the ready state.");
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "READY" } });
+    } else if (input.type === "ROUND_STARTING") {
+      const data = input.data;
+      assertAssignedPlayers(match, data.players);
+      if (!["READY", "LIVE"].includes(match.status)) throw new FighterPoolError("This match cannot start a round in its current state.");
+      if (data.redRoundWins !== match.redRoundWins || data.blueRoundWins !== match.blueRoundWins) throw new FighterPoolError("The round-start score does not match the recorded series score.");
+      if (data.roundNumber !== match.redRoundWins + match.blueRoundWins + 1) throw new FighterPoolError("The reported round number is not next in this series.");
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "LIVE", startedAt: match.startedAt ?? occurredAt, currentRound: data.roundNumber, countdownSeconds: data.countdownSeconds, countdownStartedAt: occurredAt } });
+    } else if (input.type === "ROUND_COMPLETED") {
+      const data = input.data;
+      if (match.status !== "LIVE") throw new FighterPoolError("This match is not live.");
+      const winnerTeam = assignedTeam(match, data.winnerMinecraftUsername);
+      const loserTeam = assignedTeam(match, data.loserMinecraftUsername);
+      if (winnerTeam !== data.winnerTeam || loserTeam !== data.loserTeam || winnerTeam === loserTeam) throw new FighterPoolError("Round teams do not match the assigned fighters.");
+      const existingRound = await tx.fighterPoolRound.findUnique({ where: { matchId_roundId: { matchId: match.id, roundId: data.roundId } } });
+      if (existingRound) {
+        if (existingRound.roundNumber !== data.roundNumber || existingRound.winnerTeam !== data.winnerTeam || normalizeGamertag(existingRound.winnerMinecraftUsername) !== normalizeGamertag(data.winnerMinecraftUsername) || existingRound.redRoundWins !== data.redRoundWins || existingRound.blueRoundWins !== data.blueRoundWins) throw new FighterPoolError("That round identifier conflicts with an earlier result.");
+      } else {
+      const expectedRed = match.redRoundWins + (winnerTeam === "RED" ? 1 : 0);
+      const expectedBlue = match.blueRoundWins + (winnerTeam === "BLUE" ? 1 : 0);
+      if (data.roundNumber !== match.redRoundWins + match.blueRoundWins + 1 || data.redRoundWins !== expectedRed || data.blueRoundWins !== expectedBlue) throw new FighterPoolError("The round result is out of sequence or has a conflicting score.");
+      await tx.fighterPoolRound.create({ data: { matchId: match.id, roundId: data.roundId, roundNumber: data.roundNumber, winnerTeam: data.winnerTeam, winnerMinecraftUsername: data.winnerMinecraftUsername, loserTeam: data.loserTeam, loserMinecraftUsername: data.loserMinecraftUsername, redRoundWins: data.redRoundWins, blueRoundWins: data.blueRoundWins, durationSeconds: data.durationSeconds, stats: data.stats as Prisma.InputJsonValue | undefined, occurredAt } });
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { redRoundWins: data.redRoundWins, blueRoundWins: data.blueRoundWins, currentRound: data.roundNumber, countdownSeconds: null, countdownStartedAt: null } });
+      }
+    } else if (input.type === "PLAYER_DISCONNECTED") {
+      const data = input.data;
+      assignedTeam(match, data.minecraftUsername);
+      if (!["READY", "LIVE"].includes(match.status)) throw new FighterPoolError("This match is not accepting player-presence events.");
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { disconnectedUsername: data.minecraftUsername, reconnectDeadlineAt: new Date(occurredAt.getTime() + data.graceSeconds * 1000) } });
+    } else if (input.type === "PLAYER_RECONNECTED") {
+      const data = input.data;
+      assignedTeam(match, data.minecraftUsername);
+      if (match.disconnectedUsername && normalizeGamertag(match.disconnectedUsername) !== normalizeGamertag(data.minecraftUsername)) throw new FighterPoolError("A different fighter is currently marked disconnected.");
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { disconnectedUsername: null, reconnectDeadlineAt: null } });
+    } else if (input.type === "MATCH_COMPLETED") {
+      const data = input.data;
+      const team = assignedTeam(match, data.winnerMinecraftUsername);
+      if (team !== data.winnerTeam || match.status !== "COMPLETED" || match.redRoundWins !== data.redRoundWins || match.blueRoundWins !== data.blueRoundWins) throw new FighterPoolError("The completion event does not match the official result.");
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { countdownSeconds: null, countdownStartedAt: null, disconnectedUsername: null, reconnectDeadlineAt: null } });
+    }
+
+    await tx.fighterPoolLiveEvent.create({ data: { eventId: input.eventId, matchId: input.matchId, serverId: input.serverId, type: input.type, occurredAt, data: input.data as Prisma.InputJsonValue } });
+    return { duplicate: false };
+  }, { isolationLevel: "Serializable" });
+}
+
 export async function startPoolMatch(input: { serverId: string; matchId: string }) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
@@ -228,27 +335,42 @@ export async function startPoolMatch(input: { serverId: string; matchId: string 
   }, { isolationLevel: "Serializable" });
 }
 
-export async function completePoolMatch(input: { serverId: string; matchId: string; reportId: string; winnerMinecraftUsername: string; redRoundWins: number; blueRoundWins: number; payload: Prisma.InputJsonValue }) {
+export async function completePoolMatch(input: { serverId: string; matchId: string; reportId: string; winnerMinecraftUsername: string; redRoundWins: number; blueRoundWins: number; completedAt?: string; winnerTeam?: "RED" | "BLUE"; completionReason?: "BEST_OF_THREE" | "DISCONNECT_FORFEIT"; forfeitingMinecraftUsername?: string; payload: Prisma.InputJsonValue }) {
   const env = getEnv();
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`pool-result:${input.matchId}`})) IS NULL AS "locked"`;
-    const duplicate = await tx.fighterPoolMatch.findFirst({ where: { resultReportId: input.reportId } });
-    if (duplicate) return duplicate;
-    const match = await tx.fighterPoolMatch.findUnique({ where: { id: input.matchId }, include: { redFighter: true, blueFighter: true, assignedServer: true } });
-    if (!match || !["READY", "LIVE"].includes(match.status)) throw new FighterPoolError("This match cannot accept a result.");
-    if (match.assignedServer?.id !== input.serverId) throw new FighterPoolError("This match is assigned to another arena server.");
+    const duplicate = await tx.fighterPoolMatch.findFirst({ where: { resultReportId: input.reportId }, include: { redFighter: true, blueFighter: true } });
+    if (duplicate) {
+      if (duplicate.id !== input.matchId) throw new FighterPoolError("That report identifier belongs to another match.");
+      const winnerIsRed = normalizeGamertag(input.winnerMinecraftUsername) === duplicate.redFighter.minecraftUsernameNormalized;
+      const winnerIsBlue = normalizeGamertag(input.winnerMinecraftUsername) === duplicate.blueFighter.minecraftUsernameNormalized;
+      const winnerId = winnerIsRed ? duplicate.redFighterId : winnerIsBlue ? duplicate.blueFighterId : null;
+      if (winnerId !== duplicate.winnerFighterId || duplicate.redRoundWins !== input.redRoundWins || duplicate.blueRoundWins !== input.blueRoundWins) throw new FighterPoolError("That report identifier conflicts with the recorded official result.");
+      return duplicate;
+    }
+    const match = await tx.fighterPoolMatch.findUnique({ where: { id: input.matchId }, include: { redFighter: true, blueFighter: true, assignedServer: true, rounds: true } });
+    if (!match) throw new FighterPoolError("Fighter Pool match not found.");
+    if (!["READY", "LIVE"].includes(match.status)) throw new FighterPoolError("This match cannot accept a result.");
+    if ((match.arenaServerId ?? match.assignedServer?.id) !== input.serverId) throw new FighterPoolError("This match is assigned to another arena server.");
     if (Math.max(input.redRoundWins, input.blueRoundWins) !== 2 || input.redRoundWins === input.blueRoundWins) throw new FighterPoolError("A best-of-three result must have one fighter reach two round wins.");
     const winnerIsRed = normalizeGamertag(input.winnerMinecraftUsername) === match.redFighter.minecraftUsernameNormalized;
     const winnerIsBlue = normalizeGamertag(input.winnerMinecraftUsername) === match.blueFighter.minecraftUsernameNormalized;
     if (!winnerIsRed && !winnerIsBlue) throw new FighterPoolError("The reported winner is not assigned to this match.");
     if ((winnerIsRed && input.redRoundWins !== 2) || (winnerIsBlue && input.blueRoundWins !== 2)) throw new FighterPoolError("The reported winner does not match the series score.");
+    if (match.rounds.length && (match.redRoundWins !== input.redRoundWins || match.blueRoundWins !== input.blueRoundWins)) throw new FighterPoolError("The official result conflicts with the recorded round timeline.");
+    if (input.winnerTeam && input.winnerTeam !== (winnerIsRed ? "RED" : "BLUE")) throw new FighterPoolError("The reported winner team does not match the winner.");
+    if (input.completionReason === "DISCONNECT_FORFEIT") {
+      if (!input.forfeitingMinecraftUsername) throw new FighterPoolError("A disconnect forfeit must name the forfeiting fighter.");
+      const forfeitingTeam = assignedTeam(match, input.forfeitingMinecraftUsername);
+      if (forfeitingTeam === (winnerIsRed ? "RED" : "BLUE")) throw new FighterPoolError("The winner cannot be the forfeiting fighter.");
+    }
     const winner = winnerIsRed ? match.redFighter : match.blueFighter;
     const loser = winnerIsRed ? match.blueFighter : match.redFighter;
     const swapped = await applyWin(tx, winner, loser, env.FIGHT_POOL_WIN_REWARD, match.id, "original");
     const completed = await tx.fighterPoolMatch.update({ where: { id: match.id }, data: {
       status: "COMPLETED", winnerFighterId: winner.id, loserFighterId: loser.id, redRoundWins: input.redRoundWins, blueRoundWins: input.blueRoundWins,
-      rewardAmount: env.FIGHT_POOL_WIN_REWARD, resultReportId: input.reportId, completedAt: new Date(),
+      rewardAmount: env.FIGHT_POOL_WIN_REWARD, resultReportId: input.reportId, completedAt: input.completedAt ? new Date(input.completedAt) : new Date(),
       resultPayload: { envelope: input.payload, rankingSwapApplied: swapped, redRankBefore: match.redRankSnapshot, blueRankBefore: match.blueRankSnapshot },
     } });
     if (match.assignedServer) await tx.fighterPoolServer.update({ where: { id: match.assignedServer.id }, data: { status: "AVAILABLE", currentMatchId: null } });
@@ -331,7 +453,7 @@ export async function createSoloTestMatch(input: { redFighterId: string; blueFig
     const match = await tx.fighterPoolMatch.create({ data: {
       redFighterId: red.id, blueFighterId: blue.id, redRankSnapshot: red.rank, blueRankSnapshot: blue.rank,
       redCodeHash: hashCode(redCode), redCodeEncrypted: encryptCode(redCode), blueCodeHash: hashCode(blueCode), blueCodeEncrypted: encryptCode(blueCode),
-      codeExpiresAt: new Date(Date.now() + env.FIGHT_POOL_CODE_TTL_MINUTES * 60_000), redCheckedInAt: new Date(), blueCheckedInAt: new Date(), status: "READY",
+      codeExpiresAt: new Date(Date.now() + env.FIGHT_POOL_CODE_TTL_MINUTES * 60_000), redCheckedInAt: new Date(), blueCheckedInAt: new Date(), status: "READY", arenaServerId: SOLO_TEST_SERVER_ID,
       resultPayload: { soloTest: true, createdBy: input.actorId },
     } });
     await tx.fighterPoolQueueEntry.deleteMany({ where: { fighterId: { in: [red.id, blue.id] } } });

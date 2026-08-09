@@ -351,6 +351,11 @@ model FighterPoolMatch {
   blueCheckedInAt      DateTime? @map("blue_checked_in_at")
   redRoundWins         Int      @default(0) @map("red_round_wins")
   blueRoundWins        Int      @default(0) @map("blue_round_wins")
+  arenaServerId        String?  @map("arena_server_id")
+  currentRound         Int?     @map("current_round")
+  countdownSeconds     Int?     @map("countdown_seconds")
+  countdownStartedAt   DateTime? @map("countdown_started_at")
+  disconnectedUsername String?  @map("disconnected_username")
   status               FighterPoolMatchStatus @default(AWAITING_CHECKIN)
   resultDisposition    String   @default("ORIGINAL") @map("result_disposition")
   resultReportId       String?  @unique @map("result_report_id")
@@ -368,11 +373,51 @@ model FighterPoolMatch {
   loserFighter         Fighter? @relation("PoolLoser", fields: [loserFighterId], references: [id], onDelete: Restrict)
   assignedServer       FighterPoolServer?
   reviews              FighterPoolResultReview[]
+  liveEvents           FighterPoolLiveEvent[]
+  rounds               FighterPoolRound[]
 
   @@index([redFighterId, createdAt])
   @@index([blueFighterId, createdAt])
   @@index([status, createdAt])
   @@map("fighter_pool_matches")
+}
+
+model FighterPoolLiveEvent {
+  id            String   @id @default(cuid())
+  eventId       String   @unique @map("event_id")
+  matchId       String   @map("match_id")
+  serverId      String   @map("server_id")
+  type          String
+  occurredAt    DateTime @map("occurred_at")
+  data          Json
+  createdAt     DateTime @default(now()) @map("created_at")
+  match         FighterPoolMatch @relation(fields: [matchId], references: [id], onDelete: Restrict)
+
+  @@index([matchId, occurredAt])
+  @@map("fighter_pool_live_events")
+}
+
+model FighterPoolRound {
+  id                      String   @id @default(cuid())
+  matchId                 String   @map("match_id")
+  roundId                 String   @map("round_id")
+  roundNumber             Int      @map("round_number")
+  winnerTeam              String   @map("winner_team")
+  winnerMinecraftUsername String   @map("winner_minecraft_username")
+  loserTeam               String   @map("loser_team")
+  loserMinecraftUsername  String   @map("loser_minecraft_username")
+  redRoundWins            Int      @map("red_round_wins")
+  blueRoundWins           Int      @map("blue_round_wins")
+  durationSeconds         Int?     @map("duration_seconds")
+  stats                    Json?
+  occurredAt               DateTime @map("occurred_at")
+  createdAt                DateTime @default(now()) @map("created_at")
+  match                    FighterPoolMatch @relation(fields: [matchId], references: [id], onDelete: Restrict)
+
+  @@unique([matchId, roundId])
+  @@unique([matchId, roundNumber])
+  @@index([matchId, occurredAt])
+  @@map("fighter_pool_rounds")
 }
 
 model FighterPoolResultReview {

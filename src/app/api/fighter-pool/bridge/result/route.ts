@@ -7,9 +7,15 @@ import { completePoolMatch, FighterPoolError } from "@/features/fighter-pool/fig
 export async function POST(request: Request) {
   const raw = await request.text();
   if (!verifyFighterPoolBridgeRequest(request, raw)) return NextResponse.json({ error: "Unauthorized bridge request." }, { status: 401 });
-  const value = JSON.parse(raw) as Prisma.InputJsonObject;
+  let value: Prisma.InputJsonObject;
+  try { value = JSON.parse(raw) as Prisma.InputJsonObject; } catch { return NextResponse.json({ error: "Malformed JSON body." }, { status: 400 }); }
   const parsed = resultSchema.safeParse(value);
   if (!parsed.success) return NextResponse.json({ error: "Invalid best-of-three result.", details: parsed.error.flatten() }, { status: 400 });
   try { const match = await completePoolMatch({ ...parsed.data, payload: value }); return NextResponse.json({ accepted: true, matchId: match.id }); }
-  catch (error) { return NextResponse.json({ error: error instanceof FighterPoolError ? error.message : "Result submission failed." }, { status: 409 }); }
+  catch (error) {
+    const expected = error instanceof FighterPoolError;
+    if (!expected) console.error("[fighter-pool] Official result failed", error);
+    const status = expected ? (error.message.endsWith("not found.") ? 404 : 409) : 503;
+    return NextResponse.json({ error: expected ? error.message : "Result submission temporarily failed." }, { status });
+  }
 }

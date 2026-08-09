@@ -6,7 +6,9 @@ import { FighterPoolError, startPoolMatch } from "@/features/fighter-pool/fighte
 export async function POST(request: Request) {
   const raw = await request.text();
   if (!verifyFighterPoolBridgeRequest(request, raw)) return NextResponse.json({ error: "Unauthorized bridge request." }, { status: 401 });
-  const parsed = matchStartedSchema.safeParse(JSON.parse(raw));
+  let value: unknown;
+  try { value = JSON.parse(raw); } catch { return NextResponse.json({ error: "Malformed JSON body." }, { status: 400 }); }
+  const parsed = matchStartedSchema.safeParse(value);
   if (!parsed.success) return NextResponse.json({ error: "Invalid match-start report." }, { status: 400 });
   try {
     const match = await startPoolMatch(parsed.data);
