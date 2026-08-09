@@ -7,6 +7,12 @@ export const poolReviewSchema = z.object({
   confirmation: z.literal("CONFIRM"),
 });
 
+export const poolEndMatchSchema = z.object({
+  matchId: z.string().cuid(),
+  reason: z.string().trim().min(10, "Give a clear reason of at least 10 characters.").max(500),
+  confirmation: z.literal("END MATCH"),
+});
+
 export const heartbeatSchema = z.object({
   serverId: z.string().trim().min(1).max(80),
   kind: z.enum(["LOBBY", "ARENA"]),

@@ -5,6 +5,7 @@ import { requireAdmin } from "@/features/admin/authorization";
 import {
   cancelSoloTestMatchAction,
   createSoloTestMatchAction,
+  endPoolMatchAction,
   joinSoloQueueAction,
   recordSoloTestRoundAction,
   resetSoloTestStateAction,
@@ -64,6 +65,36 @@ export default async function AdminFighterPoolPage({ searchParams }: { searchPar
       <section className="admin-panel"><div className="panel-heading"><span>02</span><div><h2>Current queue</h2><p>{queue.length} fighters waiting.</p></div></div>{queue.map((entry, index) => <div className="pool-admin-row" key={entry.id}><strong>#{index + 1} · {entry.fighter.name}</strong><small>Rank #{entry.rank}</small></div>)}{!queue.length && <p className="admin-guidance">The queue is empty.</p>}</section>
     </div>
 
-    <section className="admin-panel"><div className="panel-heading"><span>03</span><div><h2>Past and active matches</h2><p>Open a match to review its complete result.</p></div></div><div className="pool-admin-matches">{matches.map((match) => <details key={match.id}><summary><span><strong>{match.redFighter.name} vs {match.blueFighter.name}</strong><small>{match.createdAt.toLocaleString("en-US")} · {match.redRoundWins}-{match.blueRoundWins}</small></span><b>{match.resultDisposition === "ORIGINAL" ? match.status : match.resultDisposition}</b></summary><div className="pool-match-review"><dl><div><dt>Match ID</dt><dd>{match.id}</dd></div><div><dt>Original server report</dt><dd>{match.resultReportId ?? "Not received"}</dd></div><div><dt>Current winner</dt><dd>{match.winnerFighter?.name ?? "Voided / undecided"}</dd></div><div><dt>Reward</dt><dd>{match.rewardAmount.toLocaleString()} Crowns</dd></div><div><dt>Arena</dt><dd>{match.assignedServer?.id ?? "Released"}</dd></div></dl>{match.reviews.length ? <div className="admin-guidance"><strong>Final review: {match.reviews[0].action}</strong><p>{match.reviews[0].reason}</p><small>{match.reviews[0].createdAt.toLocaleString("en-US")}</small></div> : match.status === "COMPLETED" ? <form action={reviewPoolMatchAction} className="admin-form"><input name="matchId" type="hidden" value={match.id} /><label>Decision<select name="action"><option value="UPHOLD">Uphold original result</option><option value="REVERSE">Reverse winner and loser</option><option value="VOID">Void the fight</option></select></label><label>Reason<textarea name="reason" minLength={10} maxLength={500} required /></label><label>Type CONFIRM<input name="confirmation" required autoComplete="off" /></label><button className="button button-primary">Save final review</button></form> : <p className="admin-guidance">Review controls become available after the server submits a completed result.</p>}</div></details>)}</div></section>
+    <section className="admin-panel">
+      <div className="panel-heading"><span>03</span><div><h2>Past and active matches</h2><p>Open a match to end an active match or review a completed result.</p></div></div>
+      <div className="pool-admin-matches">
+        {matches.map((match) => {
+          const isActive = ["AWAITING_CHECKIN", "READY", "LIVE"].includes(match.status);
+          return <details key={match.id}>
+            <summary>
+              <span><strong>{match.redFighter.name} vs {match.blueFighter.name}</strong><small>{match.createdAt.toLocaleString("en-US")} · {match.redRoundWins}-{match.blueRoundWins}</small></span>
+              <b>{match.resultDisposition === "ORIGINAL" ? match.status : match.resultDisposition}</b>
+            </summary>
+            <div className="pool-match-review">
+              <dl>
+                <div><dt>Match ID</dt><dd>{match.id}</dd></div>
+                <div><dt>Original server report</dt><dd>{match.resultReportId ?? "Not received"}</dd></div>
+                <div><dt>Current winner</dt><dd>{match.winnerFighter?.name ?? "Voided / undecided"}</dd></div>
+                <div><dt>Reward</dt><dd>{match.rewardAmount.toLocaleString()} Crowns</dd></div>
+                <div><dt>Arena</dt><dd>{match.assignedServer?.id ?? "Released"}</dd></div>
+              </dl>
+              {isActive && <form action={endPoolMatchAction} className="admin-form pool-end-match-form">
+                <input name="matchId" type="hidden" value={match.id} />
+                <div className="admin-guidance"><strong>Emergency end match</strong><p>Cancels this match, releases its arena, and lets both fighters rejoin. No record, ranking, or Crown changes are applied.</p></div>
+                <label>Reason<textarea name="reason" minLength={10} maxLength={500} required /></label>
+                <label>Type END MATCH<input name="confirmation" required autoComplete="off" /></label>
+                <button className="button button-danger" type="submit">End match</button>
+              </form>}
+              {match.reviews.length ? <div className="admin-guidance"><strong>Final review: {match.reviews[0].action}</strong><p>{match.reviews[0].reason}</p><small>{match.reviews[0].createdAt.toLocaleString("en-US")}</small></div> : match.status === "COMPLETED" ? <form action={reviewPoolMatchAction} className="admin-form"><input name="matchId" type="hidden" value={match.id} /><label>Decision<select name="action"><option value="UPHOLD">Uphold original result</option><option value="REVERSE">Reverse winner and loser</option><option value="VOID">Void the fight</option></select></label><label>Reason<textarea name="reason" minLength={10} maxLength={500} required /></label><label>Type CONFIRM<input name="confirmation" required autoComplete="off" /></label><button className="button button-primary">Save final review</button></form> : !isActive && <p className="admin-guidance">Review controls become available after the server submits a completed result.</p>}
+            </div>
+          </details>;
+        })}
+      </div>
+    </section>
   </main>;
 }

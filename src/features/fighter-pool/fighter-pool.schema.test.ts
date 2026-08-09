@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { liveEventSchema, resultSchema } from "./fighter-pool.schema";
+import { liveEventSchema, poolEndMatchSchema, resultSchema } from "./fighter-pool.schema";
 
 const envelope = {
   schemaVersion: 1 as const,
@@ -26,5 +26,10 @@ describe("Fighter Pool bridge schemas", () => {
 
   it("accepts the extended official result contract", () => {
     expect(resultSchema.safeParse({ serverId: envelope.serverId, matchId: envelope.matchId, reportId: envelope.eventId, winnerMinecraftUsername: "RITODOG", redRoundWins: 2, blueRoundWins: 1, schemaVersion: 1, completedAt: envelope.occurredAt, winnerTeam: "RED", completionReason: "BEST_OF_THREE", rounds: [] }).success).toBe(true);
+  });
+
+  it("requires an explicit confirmation and reason to end an active match", () => {
+    expect(poolEndMatchSchema.safeParse({ matchId: envelope.matchId, reason: "The arena stopped responding.", confirmation: "END MATCH" }).success).toBe(true);
+    expect(poolEndMatchSchema.safeParse({ matchId: envelope.matchId, reason: "Glitch", confirmation: "END" }).success).toBe(false);
   });
 });

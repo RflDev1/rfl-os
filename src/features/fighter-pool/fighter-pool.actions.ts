@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/features/admin/authorization";
-import { cancelSoloTestMatch, cancelUnstartedPoolMatch, createSoloTestMatch, exitCompletedPoolMatch, FighterPoolError, joinFighterPool, leaveFighterPool, recordSoloTestRound, resetSoloTestState, reviewPoolMatch, simulateSoloPresence } from "./fighter-pool.service";
-import { poolReviewSchema } from "./fighter-pool.schema";
+import { cancelSoloTestMatch, cancelUnstartedPoolMatch, createSoloTestMatch, endActivePoolMatch, exitCompletedPoolMatch, FighterPoolError, joinFighterPool, leaveFighterPool, recordSoloTestRound, resetSoloTestState, reviewPoolMatch, simulateSoloPresence } from "./fighter-pool.service";
+import { poolEndMatchSchema, poolReviewSchema } from "./fighter-pool.schema";
 
 function poolRedirect(message: string, error = false): never {
   revalidatePath("/fighter-pool");
@@ -53,6 +53,15 @@ export async function reviewPoolMatchAction(formData: FormData) {
   catch (error) { redirect(`/admin/fighter-pool?error=${encodeURIComponent(error instanceof FighterPoolError ? error.message : "The result could not be reviewed.")}`); }
   revalidatePath("/fighters"); revalidatePath("/admin/rankings"); revalidatePath("/admin/fighter-pool");
   redirect("/admin/fighter-pool?notice=Result%20review%20saved%20and%20audited.");
+}
+
+export async function endPoolMatchAction(formData: FormData) {
+  const session = await requireAdmin();
+  const parsed = poolEndMatchSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) adminPoolRedirect(parsed.error.issues[0]?.message ?? "Check the emergency match ending form.", true);
+  try { await endActivePoolMatch({ ...parsed.data, actorId: session.user.id }); }
+  catch (error) { adminPoolRedirect(error instanceof FighterPoolError ? error.message : "The active match could not be ended.", true); }
+  adminPoolRedirect("Match ended without changing records, rankings, or Crowns. Both fighters may rejoin the pool.");
 }
 
 function adminPoolRedirect(message: string, error = false): never {

@@ -215,6 +215,56 @@ export async function cancelUnstartedPoolMatch(userId: string) {
   }, { isolationLevel: "Serializable" });
 }
 
+export async function endActivePoolMatch(input: { matchId: string; actorId: string; reason: string }) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`pool-result:${input.matchId}`})) IS NULL AS "locked"`;
+    const match = await tx.fighterPoolMatch.findUnique({
+      where: { id: input.matchId },
+      include: { assignedServer: true },
+    });
+    if (!match || !ACTIVE_MATCH_STATES.includes(match.status as (typeof ACTIVE_MATCH_STATES)[number])) {
+      throw new FighterPoolError("Only an active Fighter Pool match can be ended.");
+    }
+    await tx.fighterPoolMatch.update({
+      where: { id: match.id },
+      data: {
+        status: "CANCELLED",
+        countdownSeconds: null,
+        countdownStartedAt: null,
+        disconnectedUsername: null,
+        reconnectDeadlineAt: null,
+      },
+    });
+    await tx.fighterPoolQueueEntry.deleteMany({ where: { fighterId: { in: [match.redFighterId, match.blueFighterId] } } });
+    if (match.assignedServer) {
+      await tx.fighterPoolServer.update({
+        where: { id: match.assignedServer.id },
+        data: { status: match.assignedServer.id === SOLO_TEST_SERVER_ID ? "OFFLINE" : "AVAILABLE", currentMatchId: null },
+      });
+    }
+    await tx.adminAuditEntry.create({
+      data: {
+        actorId: input.actorId,
+        action: "FIGHT_POOL_MATCH_ENDED",
+        targetType: "FighterPoolMatch",
+        targetId: match.id,
+        summary: {
+          reason: input.reason,
+          previousStatus: match.status,
+          redRoundWins: match.redRoundWins,
+          blueRoundWins: match.blueRoundWins,
+          arenaServerId: match.arenaServerId,
+          recordsChanged: false,
+          rankingsChanged: false,
+          crownsChanged: false,
+        },
+      },
+    });
+    return match;
+  }, { isolationLevel: "Serializable" });
+}
+
 export async function recordPoolServerHeartbeat(input: { serverId: string; kind: "LOBBY" | "ARENA"; publicAddress: string; port: number; status: "AVAILABLE" | "OFFLINE"; players: string[] }) {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -288,6 +338,9 @@ export async function recordPoolLiveEvent(input: FighterPoolLiveEventInput) {
     if (!serverExists) throw new FighterPoolError("Fighter Pool server not found.");
     const arenaServerId = match.arenaServerId ?? match.assignedServer?.id;
     if (arenaServerId !== input.serverId) throw new FighterPoolError("This match is assigned to another arena server.");
+    if (!ACTIVE_MATCH_STATES.includes(match.status as (typeof ACTIVE_MATCH_STATES)[number]) && !(input.type === "MATCH_COMPLETED" && match.status === "COMPLETED")) {
+      throw new FighterPoolError("This match is no longer active and cannot accept live events.");
+    }
     const occurredAt = new Date(input.occurredAt);
     if (input.type === "FIGHTER_CHECKED_IN") {
       const data = input.data;
