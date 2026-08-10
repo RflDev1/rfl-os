@@ -9,7 +9,7 @@ type PoolState = {
   match: null | {
     id: string; status: string; opponent: string; code: string | null; expiresAt: string; serverAddress: string | null; serverPort: number | null; checkedIn: boolean; canCancel: boolean;
     checkIn: { red: MatchPlayer & { checkedIn: boolean }; blue: MatchPlayer & { checkedIn: boolean } };
-    live: null | { red: MatchPlayer & { checkedIn: boolean; roundWins: number }; blue: MatchPlayer & { checkedIn: boolean; roundWins: number }; currentRound: number | null; countdownSeconds: number | null; countdownStartedAt: string | null; disconnectedUsername: string | null; reconnectDeadlineAt: string | null; winnerFighterName: string | null; rounds: Array<{ roundId: string; roundNumber: number; winnerTeam: string; winnerMinecraftUsername: string; redRoundWins: number; blueRoundWins: number }> };
+    live: null | { red: MatchPlayer & { checkedIn: boolean; roundWins: number }; blue: MatchPlayer & { checkedIn: boolean; roundWins: number }; currentRound: number | null; countdownSeconds: number | null; countdownStartedAt: string | null; disconnectedUsername: string | null; reconnectDeadlineAt: string | null; forfeitedUsername: string | null; winnerFighterName: string | null; rounds: Array<{ roundId: string; roundNumber: number; winnerTeam: string; winnerMinecraftUsername: string; redRoundWins: number; blueRoundWins: number }> };
   };
 };
 
@@ -26,13 +26,14 @@ function LiveMatchSummary({ match }: { match: NonNullable<PoolState["match"]> })
   }, [live.countdownSeconds, live.countdownStartedAt]);
   const countdown = live.countdownStartedAt && live.countdownSeconds !== null ? Math.max(0, Math.ceil(live.countdownSeconds - ((now || new Date(live.countdownStartedAt).getTime()) - new Date(live.countdownStartedAt).getTime()) / 1000)) : null;
   const disconnected = live.disconnectedUsername?.toLocaleLowerCase("en-US");
+  const forfeited = live.forfeitedUsername?.toLocaleLowerCase("en-US");
   return <section className="pool-match-found pool-live-summary" aria-live="polite">
-    <p className="eyebrow"><span /> {match.status === "COMPLETED" ? "Official result" : countdown && countdown > 0 ? "Round countdown" : "Match live"}</p>
-    <h2>{match.status === "COMPLETED" ? `${live.winnerFighterName ?? "Winner"} wins` : countdown && countdown > 0 ? `Round ${live.currentRound} begins in ${countdown} seconds` : `Round ${live.currentRound ?? 1} in progress`}</h2>
+    <p className="eyebrow"><span /> {match.status === "COMPLETED" ? "Official result" : forfeited ? "Disconnect forfeit" : countdown && countdown > 0 ? "Round countdown" : "Match live"}</p>
+    <h2>{match.status === "COMPLETED" ? `${live.winnerFighterName ?? "Winner"} wins` : forfeited ? `${live.forfeitedUsername} forfeited — awaiting official result` : countdown && countdown > 0 ? `Round ${live.currentRound} begins in ${countdown} seconds` : `Round ${live.currentRound ?? 1} in progress`}</h2>
     <div className="pool-series-score" aria-label={`Series score: Red ${live.red.roundWins}, Blue ${live.blue.roundWins}`}>
-      <article className="pool-team-red"><span>Red</span><strong>{live.red.fighterName}</strong><small>{live.red.minecraftUsername}</small><b>{live.red.roundWins}</b>{disconnected === live.red.minecraftUsername?.toLocaleLowerCase("en-US") ? <em>Disconnected — reconnect by {live.reconnectDeadlineAt ? new Date(live.reconnectDeadlineAt).toLocaleTimeString() : "soon"}</em> : null}</article>
+      <article className="pool-team-red"><span>Red</span><strong>{live.red.fighterName}</strong><small>{live.red.minecraftUsername}</small><b>{live.red.roundWins}</b>{disconnected === live.red.minecraftUsername?.toLocaleLowerCase("en-US") ? <em>{forfeited === disconnected ? "Disconnected — match forfeited" : `Disconnected — reconnect by ${live.reconnectDeadlineAt ? new Date(live.reconnectDeadlineAt).toLocaleTimeString() : "soon"}`}</em> : null}</article>
       <span className="pool-score-divider">–</span>
-      <article className="pool-team-blue"><span>Blue</span><strong>{live.blue.fighterName}</strong><small>{live.blue.minecraftUsername}</small><b>{live.blue.roundWins}</b>{disconnected === live.blue.minecraftUsername?.toLocaleLowerCase("en-US") ? <em>Disconnected — reconnect by {live.reconnectDeadlineAt ? new Date(live.reconnectDeadlineAt).toLocaleTimeString() : "soon"}</em> : null}</article>
+      <article className="pool-team-blue"><span>Blue</span><strong>{live.blue.fighterName}</strong><small>{live.blue.minecraftUsername}</small><b>{live.blue.roundWins}</b>{disconnected === live.blue.minecraftUsername?.toLocaleLowerCase("en-US") ? <em>{forfeited === disconnected ? "Disconnected — match forfeited" : `Disconnected — reconnect by ${live.reconnectDeadlineAt ? new Date(live.reconnectDeadlineAt).toLocaleTimeString() : "soon"}`}</em> : null}</article>
     </div>
     <div className="pool-round-history"><h3>Rounds</h3>{live.rounds.length ? <ol>{live.rounds.map((round) => <li key={round.roundId}><span>Round {round.roundNumber}</span><strong>{round.winnerMinecraftUsername} ({round.winnerTeam === "RED" ? "Red" : "Blue"})</strong></li>)}</ol> : <p>Round results will appear here immediately.</p>}</div>
     {match.status === "COMPLETED" ? <form action={exitCompletedPoolMatchAction}><button className="button button-primary">Exit Fighter Pool</button><p>You can join the Fighter Pool again after exiting.</p></form> : null}

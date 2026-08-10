@@ -28,6 +28,14 @@ describe("Fighter Pool bridge schemas", () => {
     expect(resultSchema.safeParse({ serverId: envelope.serverId, matchId: envelope.matchId, reportId: envelope.eventId, winnerMinecraftUsername: "RITODOG", redRoundWins: 2, blueRoundWins: 1, schemaVersion: 1, completedAt: envelope.occurredAt, winnerTeam: "RED", completionReason: "BEST_OF_THREE", rounds: [] }).success).toBe(true);
   });
 
+  it("accepts the bridge 1.0.26 immediate disconnect-forfeit event", () => {
+    expect(liveEventSchema.safeParse({ ...envelope, type: "PLAYER_DISCONNECTED", data: { minecraftUsername: "PLAYER 2", graceSeconds: 0, forfeited: true } }).success).toBe(true);
+  });
+
+  it("rejects legacy reconnect-grace disconnect payloads", () => {
+    expect(liveEventSchema.safeParse({ ...envelope, type: "PLAYER_DISCONNECTED", data: { minecraftUsername: "PLAYER 2", graceSeconds: 30 } }).success).toBe(false);
+  });
+
   it("requires an explicit confirmation and reason to end an active match", () => {
     expect(poolEndMatchSchema.safeParse({ matchId: envelope.matchId, reason: "The arena stopped responding.", confirmation: "END MATCH" }).success).toBe(true);
     expect(poolEndMatchSchema.safeParse({ matchId: envelope.matchId, reason: "Glitch", confirmation: "END" }).success).toBe(false);

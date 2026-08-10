@@ -126,6 +126,7 @@ export async function getFighterPoolState(userId: string) {
       countdownStartedAt: match.countdownStartedAt,
       disconnectedUsername: match.disconnectedUsername,
       reconnectDeadlineAt: match.reconnectDeadlineAt,
+      forfeitedUsername: match.disconnectedUsername && !match.reconnectDeadlineAt ? match.disconnectedUsername : null,
       winnerFighterName: match.winnerFighterId === match.redFighterId ? match.redFighter.name : match.winnerFighterId === match.blueFighterId ? match.blueFighter.name : null,
       rounds: match.rounds.map((round) => ({ roundId: round.roundId, roundNumber: round.roundNumber, winnerTeam: round.winnerTeam, winnerMinecraftUsername: round.winnerMinecraftUsername, redRoundWins: round.redRoundWins, blueRoundWins: round.blueRoundWins })),
     } : null,
@@ -357,12 +358,14 @@ export async function recordPoolLiveEvent(input: FighterPoolLiveEventInput) {
       const data = input.data;
       assertAssignedPlayers(match, data.players);
       if (!["READY", "LIVE"].includes(match.status)) throw new FighterPoolError("This match cannot start a round in its current state.");
+      if (match.disconnectedUsername && !match.reconnectDeadlineAt) throw new FighterPoolError("This match is awaiting its official disconnect-forfeit result.");
       if (data.redRoundWins !== match.redRoundWins || data.blueRoundWins !== match.blueRoundWins) throw new FighterPoolError("The round-start score does not match the recorded series score.");
       if (data.roundNumber !== match.redRoundWins + match.blueRoundWins + 1) throw new FighterPoolError("The reported round number is not next in this series.");
       await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { status: "LIVE", startedAt: match.startedAt ?? occurredAt, currentRound: data.roundNumber, countdownSeconds: data.countdownSeconds, countdownStartedAt: occurredAt } });
     } else if (input.type === "ROUND_COMPLETED") {
       const data = input.data;
       if (match.status !== "LIVE") throw new FighterPoolError("This match is not live.");
+      if (match.disconnectedUsername && !match.reconnectDeadlineAt) throw new FighterPoolError("This match is awaiting its official disconnect-forfeit result.");
       const winnerTeam = assignedTeam(match, data.winnerMinecraftUsername);
       const loserTeam = assignedTeam(match, data.loserMinecraftUsername);
       if (winnerTeam !== data.winnerTeam || loserTeam !== data.loserTeam || winnerTeam === loserTeam) throw new FighterPoolError("Round teams do not match the assigned fighters.");
@@ -379,11 +382,12 @@ export async function recordPoolLiveEvent(input: FighterPoolLiveEventInput) {
     } else if (input.type === "PLAYER_DISCONNECTED") {
       const data = input.data;
       assignedTeam(match, data.minecraftUsername);
-      if (!["READY", "LIVE"].includes(match.status)) throw new FighterPoolError("This match is not accepting player-presence events.");
-      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { disconnectedUsername: data.minecraftUsername, reconnectDeadlineAt: new Date(occurredAt.getTime() + data.graceSeconds * 1000) } });
+      if (match.status !== "LIVE" || !match.startedAt) throw new FighterPoolError("A disconnect can only forfeit a match after the first round countdown begins.");
+      await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { disconnectedUsername: data.minecraftUsername, reconnectDeadlineAt: null, countdownSeconds: null, countdownStartedAt: null } });
     } else if (input.type === "PLAYER_RECONNECTED") {
       const data = input.data;
       assignedTeam(match, data.minecraftUsername);
+      if (!match.reconnectDeadlineAt) throw new FighterPoolError("This match uses immediate disconnect forfeits and cannot accept a reconnect event.");
       if (match.disconnectedUsername && normalizeGamertag(match.disconnectedUsername) !== normalizeGamertag(data.minecraftUsername)) throw new FighterPoolError("A different fighter is currently marked disconnected.");
       await tx.fighterPoolMatch.update({ where: { id: match.id }, data: { disconnectedUsername: null, reconnectDeadlineAt: null } });
     } else if (input.type === "MATCH_COMPLETED") {
