@@ -32,6 +32,53 @@ describe("Fighter Pool bridge schemas", () => {
     expect(liveEventSchema.safeParse({ ...envelope, type: "PLAYER_DISCONNECTED", data: { minecraftUsername: "PLAYER 2", graceSeconds: 0, forfeited: true } }).success).toBe(true);
   });
 
+  it.each([
+    [0, 0, "RED", "PLAYER 2"],
+    [1, 0, "RED", "PLAYER 2"],
+    [0, 1, "RED", "PLAYER 2"],
+    [1, 1, "BLUE", "RITODOG"],
+  ] as const)("accepts a bridge 1.0.27 disconnect forfeit at %i-%i", (redRoundWins, blueRoundWins, winnerTeam, forfeitingMinecraftUsername) => {
+    const winnerMinecraftUsername = winnerTeam === "RED" ? "RITODOG" : "PLAYER 2";
+    expect(resultSchema.safeParse({
+      serverId: envelope.serverId,
+      matchId: envelope.matchId,
+      reportId: envelope.eventId,
+      winnerMinecraftUsername,
+      winnerTeam,
+      redRoundWins,
+      blueRoundWins,
+      completionReason: "DISCONNECT_FORFEIT",
+      forfeitingMinecraftUsername,
+    }).success).toBe(true);
+  });
+
+  it("rejects a disconnect forfeit that fabricates a second round win", () => {
+    expect(resultSchema.safeParse({
+      serverId: envelope.serverId,
+      matchId: envelope.matchId,
+      reportId: envelope.eventId,
+      winnerMinecraftUsername: "RITODOG",
+      winnerTeam: "RED",
+      redRoundWins: 2,
+      blueRoundWins: 0,
+      completionReason: "DISCONNECT_FORFEIT",
+      forfeitingMinecraftUsername: "PLAYER 2",
+    }).success).toBe(false);
+  });
+
+  it("still requires a normal best-of-three result to reach two wins", () => {
+    expect(resultSchema.safeParse({
+      serverId: envelope.serverId,
+      matchId: envelope.matchId,
+      reportId: envelope.eventId,
+      winnerMinecraftUsername: "RITODOG",
+      winnerTeam: "RED",
+      redRoundWins: 1,
+      blueRoundWins: 0,
+      completionReason: "BEST_OF_THREE",
+    }).success).toBe(false);
+  });
+
   it("rejects legacy reconnect-grace disconnect payloads", () => {
     expect(liveEventSchema.safeParse({ ...envelope, type: "PLAYER_DISCONNECTED", data: { minecraftUsername: "PLAYER 2", graceSeconds: 30 } }).success).toBe(false);
   });

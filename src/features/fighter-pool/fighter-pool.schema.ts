@@ -33,6 +33,26 @@ export const resultSchema = z.object({
   completionReason: z.enum(["BEST_OF_THREE", "DISCONNECT_FORFEIT"]).default("BEST_OF_THREE"),
   forfeitingMinecraftUsername: z.string().trim().min(1).max(16).optional(),
   rounds: z.array(z.unknown()).max(3).optional(),
+}).superRefine((result, context) => {
+  if (result.completionReason === "BEST_OF_THREE") {
+    if (Math.max(result.redRoundWins, result.blueRoundWins) !== 2 || result.redRoundWins === result.blueRoundWins) {
+      context.addIssue({ code: "custom", path: ["redRoundWins"], message: "A best-of-three result must end 2-0 or 2-1." });
+    }
+    if (result.winnerTeam === "RED" && result.redRoundWins !== 2) {
+      context.addIssue({ code: "custom", path: ["winnerTeam"], message: "The winning team must have two round wins." });
+    }
+    if (result.winnerTeam === "BLUE" && result.blueRoundWins !== 2) {
+      context.addIssue({ code: "custom", path: ["winnerTeam"], message: "The winning team must have two round wins." });
+    }
+    return;
+  }
+
+  if (!result.forfeitingMinecraftUsername) {
+    context.addIssue({ code: "custom", path: ["forfeitingMinecraftUsername"], message: "A disconnect forfeit must name the forfeiting fighter." });
+  }
+  if (result.redRoundWins > 1 || result.blueRoundWins > 1) {
+    context.addIssue({ code: "custom", path: ["redRoundWins"], message: "A disconnect-forfeit score must contain only rounds completed before the disconnect." });
+  }
 });
 
 const playerSchema = z.object({

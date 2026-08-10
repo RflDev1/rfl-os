@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   let value: Prisma.InputJsonObject;
   try { value = JSON.parse(raw) as Prisma.InputJsonObject; } catch { return NextResponse.json({ error: "Malformed JSON body." }, { status: 400 }); }
   const parsed = resultSchema.safeParse(value);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid best-of-three result.", details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Invalid official match result.", details: parsed.error.flatten() }, { status: 400 });
   try { const match = await completePoolMatch({ ...parsed.data, payload: value }); return NextResponse.json({ accepted: true, matchId: match.id }); }
   catch (error) {
     const expected = error instanceof FighterPoolError;

@@ -415,6 +415,7 @@ export async function startPoolMatch(input: { serverId: string; matchId: string 
 
 export async function completePoolMatch(input: { serverId: string; matchId: string; reportId: string; winnerMinecraftUsername: string; redRoundWins: number; blueRoundWins: number; completedAt?: string; winnerTeam?: "RED" | "BLUE"; completionReason?: "BEST_OF_THREE" | "DISCONNECT_FORFEIT"; forfeitingMinecraftUsername?: string; payload: Prisma.InputJsonValue }) {
   const env = getEnv();
+  const completionReason = input.completionReason ?? "BEST_OF_THREE";
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MATCHMAKING_LOCK})`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`pool-result:${input.matchId}`})) IS NULL AS "locked"`;
@@ -431,14 +432,24 @@ export async function completePoolMatch(input: { serverId: string; matchId: stri
     if (!match) throw new FighterPoolError("Fighter Pool match not found.");
     if (!["READY", "LIVE"].includes(match.status)) throw new FighterPoolError("This match cannot accept a result.");
     if ((match.arenaServerId ?? match.assignedServer?.id) !== input.serverId) throw new FighterPoolError("This match is assigned to another arena server.");
-    if (Math.max(input.redRoundWins, input.blueRoundWins) !== 2 || input.redRoundWins === input.blueRoundWins) throw new FighterPoolError("A best-of-three result must have one fighter reach two round wins.");
     const winnerIsRed = normalizeGamertag(input.winnerMinecraftUsername) === match.redFighter.minecraftUsernameNormalized;
     const winnerIsBlue = normalizeGamertag(input.winnerMinecraftUsername) === match.blueFighter.minecraftUsernameNormalized;
     if (!winnerIsRed && !winnerIsBlue) throw new FighterPoolError("The reported winner is not assigned to this match.");
-    if ((winnerIsRed && input.redRoundWins !== 2) || (winnerIsBlue && input.blueRoundWins !== 2)) throw new FighterPoolError("The reported winner does not match the series score.");
-    if (match.rounds.length && (match.redRoundWins !== input.redRoundWins || match.blueRoundWins !== input.blueRoundWins)) throw new FighterPoolError("The official result conflicts with the recorded round timeline.");
+    if (completionReason === "BEST_OF_THREE") {
+      if (Math.max(input.redRoundWins, input.blueRoundWins) !== 2 || input.redRoundWins === input.blueRoundWins) throw new FighterPoolError("A best-of-three result must have one fighter reach two round wins.");
+      if ((winnerIsRed && input.redRoundWins !== 2) || (winnerIsBlue && input.blueRoundWins !== 2)) throw new FighterPoolError("The reported winner does not match the series score.");
+    } else if (input.redRoundWins > 1 || input.blueRoundWins > 1) {
+      throw new FighterPoolError("A disconnect-forfeit result must preserve only the rounds completed before the disconnect.");
+    }
+    const recordedRedWins = match.rounds.filter((round) => round.winnerTeam === "RED").length;
+    const recordedBlueWins = match.rounds.filter((round) => round.winnerTeam === "BLUE").length;
+    if (completionReason === "DISCONNECT_FORFEIT") {
+      if (recordedRedWins !== input.redRoundWins || recordedBlueWins !== input.blueRoundWins) throw new FighterPoolError("The disconnect-forfeit score conflicts with the completed rounds recorded by the arena.");
+    } else if (match.rounds.length && (recordedRedWins !== input.redRoundWins || recordedBlueWins !== input.blueRoundWins)) {
+      throw new FighterPoolError("The official result conflicts with the recorded round timeline.");
+    }
     if (input.winnerTeam && input.winnerTeam !== (winnerIsRed ? "RED" : "BLUE")) throw new FighterPoolError("The reported winner team does not match the winner.");
-    if (input.completionReason === "DISCONNECT_FORFEIT") {
+    if (completionReason === "DISCONNECT_FORFEIT") {
       if (!input.forfeitingMinecraftUsername) throw new FighterPoolError("A disconnect forfeit must name the forfeiting fighter.");
       const forfeitingTeam = assignedTeam(match, input.forfeitingMinecraftUsername);
       if (forfeitingTeam === (winnerIsRed ? "RED" : "BLUE")) throw new FighterPoolError("The winner cannot be the forfeiting fighter.");
